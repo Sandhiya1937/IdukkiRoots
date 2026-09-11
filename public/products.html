@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Products Catalog - IdukkiRoots</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-container">
+            <a href="/" class="logo">
+                <div class="logo-icon"><i class="fas fa-seedling"></i></div>
+                <span>IdukkiRoots</span>
+            </a>
+            <div class="search-container">
+                <form class="search-form" id="search-form" onsubmit="applySearch(event)">
+                    <input type="text" id="search-input" class="search-input" placeholder="Search spices, tea, coffee...">
+                    <button type="submit" class="search-btn"><i class="fas fa-search"></i> Search</button>
+                </form>
+            </div>
+            <div class="header-actions">
+                <a href="/profile.html" class="action-btn"><i class="far fa-user"></i><span id="user-btn-text">Account</span></a>
+                <a href="/profile.html#wishlist" class="action-btn"><i class="far fa-heart"></i><span>Wishlist</span><span class="action-badge" id="wishlist-count">0</span></a>
+                <a href="/cart.html" class="action-btn"><i class="fas fa-shopping-bag"></i><span>Cart</span><span class="action-badge" id="cart-count">0</span></a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Catalog Main Layout -->
+    <div class="catalog-container">
+        <!-- Sidebar Filters -->
+        <aside class="filter-sidebar">
+            <div class="filter-title">
+                <span><i class="fas fa-filter"></i> Filters</span>
+                <button onclick="resetFilters()" style="background:none; border:none; color:var(--primary); font-size:0.8rem; cursor:pointer; font-weight:600;">Clear All</button>
+            </div>
+
+            <!-- Categories Filter -->
+            <div class="filter-group">
+                <div class="filter-label">Categories</div>
+                <div id="category-filter-list">
+                    <!-- Dynamic categories -->
+                </div>
+            </div>
+
+            <!-- Price Range Filter -->
+            <div class="filter-group">
+                <div class="filter-label">Price Range (₹)</div>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <input type="number" id="min-price" placeholder="Min" class="search-input" style="padding:0.4rem; font-size:0.85rem; border:1px solid var(--border-color); border-radius:4px; width:50%;">
+                    <span>-</span>
+                    <input type="number" id="max-price" placeholder="Max" class="search-input" style="padding:0.4rem; font-size:0.85rem; border:1px solid var(--border-color); border-radius:4px; width:50%;">
+                </div>
+            </div>
+
+            <!-- Rating Filter -->
+            <div class="filter-group">
+                <div class="filter-label">Customer Rating</div>
+                <label class="filter-option"><input type="radio" name="rating_filter" value="4" onchange="fetchCatalog()"> 4★ & above</label>
+                <label class="filter-option"><input type="radio" name="rating_filter" value="3" onchange="fetchCatalog()"> 3★ & above</label>
+                <label class="filter-option"><input type="radio" name="rating_filter" value="0" checked onchange="fetchCatalog()"> All Ratings</label>
+            </div>
+
+            <!-- Stock Filter -->
+            <div class="filter-group">
+                <label class="filter-option" style="font-weight:600; color:var(--secondary);">
+                    <input type="checkbox" id="in-stock-only" onchange="fetchCatalog()"> Include In Stock Only
+                </label>
+            </div>
+
+            <button class="btn btn-primary btn-sm" style="width:100%; margin-top:0.5rem;" onclick="fetchCatalog()">Apply Filters</button>
+        </aside>
+
+        <!-- Main Products Display Area -->
+        <main>
+            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface); padding:0.85rem 1.25rem; border-radius:var(--radius-md); border:1px solid var(--border-color); margin-bottom:1.25rem;">
+                <div>
+                    <span id="results-count" style="font-weight:600; color:var(--secondary);">Loading products...</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <label for="sort-select" style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">Sort By:</label>
+                    <select id="sort-select" style="padding:0.4rem 0.8rem; border-radius:var(--radius-sm); border:1px solid var(--border-color); font-size:0.85rem; font-weight:600;" onchange="fetchCatalog()">
+                        <option value="popularity">Popularity / Relevance</option>
+                        <option value="price_asc">Price: Low to High</option>
+                        <option value="price_desc">Price: High to Low</option>
+                        <option value="rating">Customer Rating</option>
+                        <option value="newest">Newest Arrivals</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="product-grid" id="catalog-products-grid">
+                <!-- Products -->
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentCategory = urlParams.get('category') || '';
+        let currentQuery = urlParams.get('q') || '';
+
+        async function initCatalog() {
+            updateHeaderState();
+            if (currentQuery) {
+                document.getElementById('search-input').value = currentQuery;
+            }
+
+            try {
+                const categories = await API.request('/products/categories/all');
+                renderCategoryFilters(categories);
+            } catch(e){}
+
+            fetchCatalog();
+            updateCounts();
+        }
+
+        function updateHeaderState() {
+            const user = API.getUser();
+            document.getElementById('user-btn-text').textContent = user ? (user.first_name || 'Account') : 'Login';
+        }
+
+        async function updateCounts() {
+            try {
+                const cart = await API.getCart();
+                document.getElementById('cart-count').textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+            } catch(e){}
+            if (API.isLoggedIn()) {
+                try {
+                    const wishlist = await API.request('/wishlist');
+                    document.getElementById('wishlist-count').textContent = wishlist.length;
+                } catch(e){}
+            }
+        }
+
+        function renderCategoryFilters(categories) {
+            const container = document.getElementById('category-filter-list');
+            let html = `<label class="filter-option"><input type="radio" name="cat_filter" value="" ${!currentCategory ? 'checked' : ''} onchange="onCategorySelect('')"> All Categories</label>`;
+            categories.forEach(cat => {
+                const isChecked = currentCategory === cat.slug || currentCategory === String(cat.id);
+                html += `<label class="filter-option"><input type="radio" name="cat_filter" value="${cat.slug}" ${isChecked ? 'checked' : ''} onchange="onCategorySelect('${cat.slug}')"> ${cat.name}</label>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function onCategorySelect(slug) {
+            currentCategory = slug;
+            fetchCatalog();
+        }
+
+        function applySearch(e) {
+            e.preventDefault();
+            currentQuery = document.getElementById('search-input').value.trim();
+            fetchCatalog();
+        }
+
+        function resetFilters() {
+            currentCategory = '';
+            currentQuery = '';
+            document.getElementById('search-input').value = '';
+            document.getElementById('min-price').value = '';
+            document.getElementById('max-price').value = '';
+            document.getElementById('in-stock-only').checked = false;
+            document.querySelector('input[name="rating_filter"][value="0"]').checked = true;
+            const allCatRadio = document.querySelector('input[name="cat_filter"][value=""]');
+            if (allCatRadio) allCatRadio.checked = true;
+            fetchCatalog();
+        }
+
+        async function fetchCatalog() {
+            const grid = document.getElementById('catalog-products-grid');
+            grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 3rem;"><i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Loading products...</p>';
+
+            const minPrice = document.getElementById('min-price').value;
+            const maxPrice = document.getElementById('max-price').value;
+            const ratingVal = document.querySelector('input[name="rating_filter"]:checked')?.value || 0;
+            const inStock = document.getElementById('in-stock-only').checked;
+            const sort = document.getElementById('sort-select').value;
+
+            let query = `/products?sort=${sort}`;
+            if (currentQuery) query += `&q=${encodeURIComponent(currentQuery)}`;
+            if (currentCategory) query += `&category=${encodeURIComponent(currentCategory)}`;
+            if (minPrice) query += `&min_price=${minPrice}`;
+            if (maxPrice) query += `&max_price=${maxPrice}`;
+            if (ratingVal > 0) query += `&min_rating=${ratingVal}`;
+            if (inStock) query += `&in_stock=true`;
+
+            try {
+                const products = await API.request(query);
+                document.getElementById('results-count').textContent = `Showing ${products.length} Product(s)`;
+
+                if (products.length === 0) {
+                    grid.innerHTML = `
+                        <div style="grid-column: 1/-1; text-align: center; padding: 4rem; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                            <i class="fas fa-box-open" style="font-size: 3rem; color: var(--text-light); margin-bottom: 1rem;"></i>
+                            <h3 style="color: var(--secondary);">No Products Match Your Filters</h3>
+                            <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0.5rem 0 1.5rem;">Try relaxing your search terms or clearing price & category filters.</p>
+                            <button class="btn btn-outline" onclick="resetFilters()"><i class="fas fa-redo"></i> Clear All Filters</button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+                products.forEach(p => {
+                    const price = p.price || 0;
+                    const mrp = p.mrp || price;
+                    const img = p.image_url || 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=500&q=80';
+                    const discount = mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
+
+                    html += `
+                        <div class="product-card">
+                            <div class="product-thumb">
+                                <a href="/product-details.html?slug=${p.slug}">
+                                    <img src="${img}" alt="${p.name}">
+                                </a>
+                                ${discount > 0 ? `<span class="discount-badge">${discount}% OFF</span>` : ''}
+                                ${p.custom_tag ? `<span class="tag-badge">${p.custom_tag}</span>` : ''}
+                                <button class="wishlist-btn" onclick="API.toggleWishlist(${p.id})">
+                                    <i class="fas fa-heart"></i>
+                                </button>
+                            </div>
+                            <div class="product-info">
+                                <span class="product-category">${p.category_name || 'Spices'}</span>
+                                <a href="/product-details.html?slug=${p.slug}">
+                                    <h3 class="product-title">${p.name}</h3>
+                                </a>
+                                <div class="rating-row">
+                                    <div class="stars">${API.renderStars(p.rating_avg)}</div>
+                                    <span class="rating-count">(${p.rating_count || 0})</span>
+                                </div>
+                                <div class="price-row">
+                                    <span class="current-price">${API.formatCurrency(price)}</span>
+                                    ${mrp > price ? `<span class="mrp-price">${API.formatCurrency(mrp)}</span>` : ''}
+                                </div>
+                                <div class="card-actions">
+                                    <button class="btn btn-primary btn-sm" style="width:100%;" onclick="API.addToCart(${p.variant_id || p.id}, 1, {name: '${p.name.replace(/'/g, "\\'")}', price: ${price}, image: '${img}'})">
+                                        <i class="fas fa-cart-plus"></i> Add to Cart
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                grid.innerHTML = html;
+            } catch (error) {
+                grid.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--danger);">Failed to load products.</p>`;
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', initCatalog);
+        window.addEventListener('cart-changed', updateCounts);
+        window.addEventListener('wishlist-changed', updateCounts);
+    </script>
+</body>
+</html>

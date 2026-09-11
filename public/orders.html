@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Orders & Live Tracking - IdukkiRoots</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .timeline {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            margin: 2rem 0 1rem;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #e2e8f0;
+            z-index: 1;
+        }
+        .timeline-step {
+            position: relative;
+            z-index: 2;
+            background: #ffffff;
+            text-align: center;
+            padding: 0 0.5rem;
+        }
+        .step-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #e2e8f0;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 0.4rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+        .timeline-step.completed .step-icon {
+            background: var(--primary);
+            color: #ffffff;
+        }
+        .step-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+        .timeline-step.completed .step-label {
+            color: var(--secondary);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-container">
+            <a href="/" class="logo">
+                <div class="logo-icon"><i class="fas fa-seedling"></i></div>
+                <span>IdukkiRoots</span>
+            </a>
+            <div class="header-actions">
+                <a href="/products.html" class="btn btn-outline btn-sm"><i class="fas fa-shopping-basket"></i> Browse Products</a>
+                <a href="/profile.html" class="action-btn"><i class="far fa-user"></i><span id="user-btn-text">Account</span></a>
+            </div>
+        </div>
+    </header>
+
+    <main style="max-width: 1000px; margin: 2rem auto; padding: 0 1.5rem;">
+        <h2 style="font-size: 1.6rem; color: var(--secondary); margin-bottom: 1.5rem;">My Orders</h2>
+
+        <div id="orders-container" style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <p style="text-align: center; color: var(--text-muted); padding: 4rem;">
+                <i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Loading your orders...
+            </p>
+        </div>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (!API.isLoggedIn()) {
+            window.location.href = '/register.html';
+        }
+
+        async function loadOrders() {
+            updateHeaderState();
+            const container = document.getElementById('orders-container');
+            
+            try {
+                const orders = await API.request('/orders');
+                if (orders.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 4rem; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                            <i class="fas fa-box-open" style="font-size: 3.5rem; color: var(--text-light); margin-bottom: 1rem;"></i>
+                            <h3 style="color: var(--secondary);">No Orders Found</h3>
+                            <p style="color: var(--text-muted); margin: 0.5rem 0 1.5rem;">You haven't placed any orders yet.</p>
+                            <a href="/products.html" class="btn btn-primary">Start Shopping</a>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = '';
+                orders.forEach(order => {
+                    const statusClass = order.status === 'delivered' ? 'badge-success' : order.status === 'cancelled' ? 'badge-danger' : 'badge-warning';
+                    
+                    // Render status timeline steps
+                    const steps = ['pending', 'processing', 'shipped', 'delivered'];
+                    const currentIdx = steps.indexOf(order.status);
+
+                    html += `
+                        <div style="background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-color); padding: 1.5rem; box-shadow: var(--shadow-sm);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+                                <div>
+                                    <span style="font-size: 0.8rem; color: var(--text-muted);">ORDER #${order.order_number}</span>
+                                    <h4 style="font-size: 1.05rem; color: var(--secondary); margin-top: 0.2rem;">Placed on ${new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</h4>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span class="badge ${statusClass}" style="text-transform: uppercase;">${order.status}</span>
+                                    <div style="font-weight: 800; font-size: 1.1rem; color: var(--secondary); margin-top: 0.3rem;">${API.formatCurrency(order.total_amount)}</div>
+                                </div>
+                            </div>
+
+                            ${order.status !== 'cancelled' ? `
+                                <div class="timeline">
+                                    <div class="timeline-step ${currentIdx >= 0 ? 'completed' : ''}">
+                                        <div class="step-icon"><i class="fas fa-receipt"></i></div>
+                                        <div class="step-label">Placed</div>
+                                    </div>
+                                    <div class="timeline-step ${currentIdx >= 1 ? 'completed' : ''}">
+                                        <div class="step-icon"><i class="fas fa-cog"></i></div>
+                                        <div class="step-label">Processing</div>
+                                    </div>
+                                    <div class="timeline-step ${currentIdx >= 2 ? 'completed' : ''}">
+                                        <div class="step-icon"><i class="fas fa-shipping-fast"></i></div>
+                                        <div class="step-label">Shipped</div>
+                                    </div>
+                                    <div class="timeline-step ${currentIdx >= 3 ? 'completed' : ''}">
+                                        <div class="step-icon"><i class="fas fa-home"></i></div>
+                                        <div class="step-label">Delivered</div>
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            <!-- Order Items list -->
+                            <div style="margin-top: 1rem; background: var(--bg-main); border-radius: var(--radius-sm); padding: 1rem; border: 1px solid var(--border-color);">
+                                ${(order.items || []).map(i => `
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem; padding: 0.3rem 0;">
+                                        <span style="color: var(--secondary); font-weight: 600;">${i.product_name || 'Item'} (${i.weight_value || ''}${i.weight_unit || ''}) x${i.quantity}</span>
+                                        <span style="font-weight: 700;">${API.formatCurrency(i.price_at_purchase * i.quantity)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                            <!-- Actions -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; font-size: 0.85rem;">
+                                <span style="color: var(--text-muted);">Payment: <strong>${order.payment_method}</strong> (${order.payment_status})</span>
+                                ${['pending', 'processing'].includes(order.status) ? `
+                                    <button class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger);" onclick="cancelOrder(${order.id})">
+                                        Cancel Order
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch(e){
+                container.innerHTML = '<p style="color: var(--danger); text-align: center;">Failed to load orders.</p>';
+            }
+        }
+
+        function updateHeaderState() {
+            const user = API.getUser();
+            document.getElementById('user-btn-text').textContent = user ? (user.first_name || 'Account') : 'Login';
+        }
+
+        async function cancelOrder(orderId) {
+            if (confirm('Are you sure you want to cancel this order?')) {
+                try {
+                    await API.request(`/orders/${orderId}/cancel`, { method: 'POST' });
+                    API.showToast('Order cancelled', 'info');
+                    loadOrders();
+                } catch (err) {
+                    API.showToast(err.message || 'Failed to cancel order', 'danger');
+                }
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', loadOrders);
+    </script>
+</body>
+</html>

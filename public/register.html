@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Login & Register - IdukkiRoots</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Identity Services SDK -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body style="background: var(--bg-main); min-height: 100vh; display: flex; flex-direction: column;">
+
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-container">
+            <a href="/" class="logo">
+                <div class="logo-icon"><i class="fas fa-seedling"></i></div>
+                <span>IdukkiRoots</span>
+            </a>
+            <a href="/" class="btn btn-outline btn-sm"><i class="fas fa-arrow-left"></i> Back to Store</a>
+        </div>
+    </header>
+
+    <main style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem 1.5rem;">
+        <div style="background: var(--bg-surface); width: 100%; max-width: 450px; border-radius: var(--radius-lg); border: 1px solid var(--border-color); padding: 2rem; box-shadow: var(--shadow-lg);">
+            
+            <!-- Auth Tabs -->
+            <div style="display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 1.5rem;">
+                <button id="tab-login" onclick="switchTab('login')" style="flex: 1; padding: 0.75rem; border: none; background: none; font-size: 1rem; font-weight: 700; color: var(--primary); border-bottom: 3px solid var(--primary); cursor: pointer;">Login</button>
+                <button id="tab-register" onclick="switchTab('register')" style="flex: 1; padding: 0.75rem; border: none; background: none; font-size: 1rem; font-weight: 700; color: var(--text-muted); border-bottom: 3px solid transparent; cursor: pointer;">Register</button>
+            </div>
+
+            <!-- Google OAuth Section -->
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">Fast 1-Click Login with Google</p>
+                <div id="g_id_onload"></div>
+                <div id="g_id_signin_wrapper" style="display: flex; justify-content: center; margin-bottom: 0.5rem;"></div>
+
+                <!-- Fallback Google Sign In Demo trigger -->
+                <button class="btn btn-outline" style="width: 100%; font-size: 0.85rem;" onclick="demoGoogleLogin()">
+                    <i class="fab fa-google" style="color: #ea4335;"></i> Sign in with Google (Quick Demo)
+                </button>
+
+                <div style="display: flex; align-items: center; gap: 1rem; margin: 1.25rem 0 0.5rem;">
+                    <hr style="flex: 1; border: none; border-top: 1px solid var(--border-color);">
+                    <span style="font-size: 0.8rem; color: var(--text-light); text-transform: uppercase; font-weight: 600;">OR</span>
+                    <hr style="flex: 1; border: none; border-top: 1px solid var(--border-color);">
+                </div>
+            </div>
+
+            <!-- Login Form -->
+            <form id="form-login" onsubmit="handleLogin(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div>
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--secondary);">Email Address *</label>
+                    <input type="email" id="login-email" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.6rem; font-size: 0.9rem; width: 100%; margin-top: 0.3rem;">
+                </div>
+                <div>
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--secondary);">Password *</label>
+                    <input type="password" id="login-password" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.6rem; font-size: 0.9rem; width: 100%; margin-top: 0.3rem;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="height: 44px; margin-top: 0.5rem;"><i class="fas fa-sign-in-alt"></i> Login</button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="form-register" onsubmit="handleRegister(event)" style="display: none; flex-direction: column; gap: 1rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600; color: var(--secondary);">First Name *</label>
+                        <input type="text" id="reg-fname" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.6rem; font-size: 0.9rem; width: 100%; margin-top: 0.3rem;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600; color: var(--secondary);">Last Name *</label>
+                        <input type="text" id="reg-lname" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.6rem; font-size: 0.9rem; width: 100%; margin-top: 0.3rem;">
+                    </div>
+                </div>
+                <div>
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--secondary);">Email Address *</label>
+                    <input type="email" id="reg-email" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.6rem; font-size: 0.9rem; width: 100%; margin-top: 0.3rem;">
+                </div>
+                <div>
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--secondary);">Phone Number</label>
+                    <input type="tel" id="reg-phone" class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.6rem; font-size: 0.9rem; width: 100%; margin-top: 0.3rem;">
+                </div>
+                <div>
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--secondary);">Create Password *</label>
+                    <input type="password" id="reg-password" required minlength="6" class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.6rem; font-size: 0.9rem; width: 100%; margin-top: 0.3rem;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="height: 44px; margin-top: 0.5rem;"><i class="fas fa-user-plus"></i> Create Account</button>
+            </form>
+
+        </div>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script>
+        function switchTab(mode) {
+            const loginForm = document.getElementById('form-login');
+            const regForm = document.getElementById('form-register');
+            const loginTab = document.getElementById('tab-login');
+            const regTab = document.getElementById('tab-register');
+
+            if (mode === 'login') {
+                loginForm.style.display = 'flex';
+                regForm.style.display = 'none';
+                loginTab.style.color = 'var(--primary)';
+                loginTab.style.borderBottomColor = 'var(--primary)';
+                regTab.style.color = 'var(--text-muted)';
+                regTab.style.borderBottomColor = 'transparent';
+            } else {
+                loginForm.style.display = 'none';
+                regForm.style.display = 'flex';
+                regTab.style.color = 'var(--primary)';
+                regTab.style.borderBottomColor = 'var(--primary)';
+                loginTab.style.color = 'var(--text-muted)';
+                loginTab.style.borderBottomColor = 'transparent';
+            }
+        }
+
+        async function initGoogleOAuth() {
+            try {
+                const config = await API.request('/auth/config');
+                const clientId = config.googleClientId;
+
+                if (clientId && clientId !== 'YOUR_GOOGLE_CLIENT_ID') {
+                    if (window.google && window.google.accounts) {
+                        window.google.accounts.id.initialize({
+                            client_id: clientId,
+                            callback: window.handleGoogleCredentialResponse
+                        });
+                        const wrapper = document.getElementById('g_id_signin_wrapper');
+                        window.google.accounts.id.renderButton(wrapper, {
+                            type: 'standard',
+                            shape: 'rectangular',
+                            theme: 'outline',
+                            text: 'signin_with',
+                            size: 'large',
+                            logo_alignment: 'left'
+                        });
+                    }
+                }
+            } catch(e) {
+                console.warn('Google Client ID not configured yet', e);
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const pwd = document.getElementById('login-password').value;
+
+            try {
+                const res = await API.login(email, pwd);
+                API.showToast('Login successful!', 'success');
+                setTimeout(() => {
+                    window.location.href = res.user.role === 'admin' ? '/admin/index.html' : '/';
+                }, 500);
+            } catch (err) {
+                API.showToast(err.message || 'Login failed', 'danger');
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const fname = document.getElementById('reg-fname').value;
+            const lname = document.getElementById('reg-lname').value;
+            const email = document.getElementById('reg-email').value;
+            const phone = document.getElementById('reg-phone').value;
+            const pwd = document.getElementById('reg-password').value;
+
+            try {
+                await API.register({ first_name: fname, last_name: lname, email, phone, password: pwd });
+                API.showToast('Account created successfully!', 'success');
+                setTimeout(() => window.location.href = '/', 500);
+            } catch (err) {
+                API.showToast(err.message || 'Registration failed', 'danger');
+            }
+        }
+
+        async function demoGoogleLogin() {
+            try {
+                const mockProfile = {
+                    email: 'customer.demo@gmail.com',
+                    first_name: 'Customer',
+                    last_name: 'Demo',
+                    avatar_url: 'https://lh3.googleusercontent.com/a/default-user'
+                };
+                await API.googleLogin(null, mockProfile);
+                API.showToast('Signed in via Google OAuth Demo!', 'success');
+                setTimeout(() => window.location.href = '/', 500);
+            } catch(e) {
+                API.showToast(e.message || 'Google login error', 'danger');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', initGoogleOAuth);
+    </script>
+</body>
+</html>
+

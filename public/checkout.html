@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout - IdukkiRoots</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-container">
+            <a href="/" class="logo">
+                <div class="logo-icon"><i class="fas fa-seedling"></i></div>
+                <span>IdukkiRoots</span>
+            </a>
+            <div class="header-actions">
+                <span style="font-size: 0.9rem; font-weight: 700; color: var(--primary);"><i class="fas fa-lock"></i> 256-Bit SSL Encrypted Checkout</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="cart-layout" style="max-width: 1200px; margin: 2rem auto; padding: 0 1.5rem;">
+        <!-- Left: Delivery Address & Payment Method -->
+        <div>
+            <!-- Step 1: Delivery Address -->
+            <section style="background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-color); padding: 1.5rem; margin-bottom: 1.5rem;">
+                <h3 style="font-size: 1.2rem; color: var(--secondary); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-map-marker-alt" style="color: var(--primary);"></i> 1. Delivery Address
+                </h3>
+
+                <!-- Logged in addresses picker -->
+                <div id="user-addresses-section" style="display: none;">
+                    <div id="addresses-list" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+                        <!-- Addresses loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- Guest Address Form -->
+                <div id="address-form-wrapper">
+                    <form id="address-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 600;">Full Name *</label>
+                            <input type="text" id="addr-name" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 600;">Phone Number *</label>
+                            <input type="tel" id="addr-phone" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%;">
+                        </div>
+                        <div style="grid-column: 1/-1;">
+                            <label style="font-size: 0.85rem; font-weight: 600;">Street Address / Flat No / Building *</label>
+                            <input type="text" id="addr-line1" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 600;">City *</label>
+                            <input type="text" id="addr-city" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 600;">State *</label>
+                            <input type="text" id="addr-state" value="Kerala" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 600;">Postal PIN Code *</label>
+                            <input type="text" id="addr-pin" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 600;">Email (Optional)</label>
+                            <input type="email" id="addr-email" class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%;">
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Step 2: Payment Method -->
+            <section style="background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-color); padding: 1.5rem;">
+                <h3 style="font-size: 1.2rem; color: var(--secondary); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-credit-card" style="color: var(--primary);"></i> 2. Payment Options
+                </h3>
+
+                <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+                    <label class="filter-option" style="padding: 1rem; border: 1.5px solid var(--border-color); border-radius: var(--radius-md); font-weight: 600; cursor: pointer; color: var(--secondary);">
+                        <input type="radio" name="payment_method" value="COD" checked onchange="togglePaymentUI('COD')">
+                        <span><i class="fas fa-money-bill-wave" style="color: var(--success);"></i> Cash on Delivery (COD)</span>
+                    </label>
+
+                    <label class="filter-option" style="padding: 1rem; border: 1.5px solid var(--border-color); border-radius: var(--radius-md); font-weight: 600; cursor: pointer; color: var(--secondary);">
+                        <input type="radio" name="payment_method" value="UPI" onchange="togglePaymentUI('UPI')">
+                        <span><i class="fas fa-qrcode" style="color: var(--primary);"></i> Google Pay / PhonePe / PayTM (UPI QR Code)</span>
+                    </label>
+
+                    <!-- UPI Details Container -->
+                    <div id="upi-details-box" style="display: none; background: #f8fafc; padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-top: 0.5rem;">
+                        <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem;">Scan QR & Pay via GPay / PhonePe:</h4>
+                        <div style="display: flex; gap: 1.5rem; align-items: center;">
+                            <div style="width: 140px; height: 140px; background: #ffffff; padding: 6px; border: 1px solid var(--border-color); border-radius: 8px;">
+                                <img id="upi-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=idukkiroots@upi%26pn=IdukkiRoots%26cu=INR" style="width: 100%; height: 100%; object-fit: contain;">
+                            </div>
+                            <div>
+                                <p style="font-size: 0.85rem; font-weight: 700; color: var(--secondary);">UPI ID: <span style="color: var(--primary-dark);">idukkiroots@upi</span></p>
+                                <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0.4rem 0;">After payment, enter your 12-digit UTR/Reference Number below:</p>
+                                <input type="text" id="upi-utr" placeholder="12-digit UTR Number" class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; width: 220px; font-weight: 600;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <label class="filter-option" style="padding: 1rem; border: 1.5px solid var(--border-color); border-radius: var(--radius-md); font-weight: 600; cursor: pointer; color: var(--secondary);">
+                        <input type="radio" name="payment_method" value="ONLINE" onchange="togglePaymentUI('ONLINE')">
+                        <span><i class="fas fa-globe" style="color: var(--info);"></i> Online Banking / Cards (Instant Approval)</span>
+                    </label>
+                </div>
+            </section>
+        </div>
+
+        <!-- Right: Order Summary Sidebar -->
+        <aside class="summary-card">
+            <h3 style="font-size: 1.2rem; color: var(--secondary); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">Items Summary</h3>
+
+            <div id="checkout-items-preview" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 250px; overflow-y: auto; margin-bottom: 1rem; padding-right: 0.4rem;">
+                <!-- Loaded dynamically -->
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Subtotal</span>
+                    <span id="chk-subtotal" style="font-weight: 700;">₹0.00</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; color: var(--success);" id="chk-discount-row">
+                    <span>Discount</span>
+                    <span id="chk-discount">-₹0.00</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--text-muted);">Shipping</span>
+                    <span style="color: var(--success); font-weight: 700;">FREE</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 1.25rem; font-weight: 800; color: var(--secondary); border-top: 2px dashed var(--border-color); padding-top: 0.8rem; margin-top: 0.4rem;">
+                    <span>Grand Total</span>
+                    <span id="chk-total" style="color: var(--primary-dark);">₹0.00</span>
+                </div>
+            </div>
+
+            <button class="btn btn-gold" style="width: 100%; margin-top: 1.5rem; height: 50px; font-size: 1.05rem;" id="place-order-btn" onclick="placeOrder()">
+                <i class="fas fa-check-circle"></i> Place Order Now
+            </button>
+        </aside>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script>
+        let checkoutCart = [];
+        let selectedAddressId = null;
+        let appliedCoupon = null;
+
+        async function initCheckout() {
+            try {
+                checkoutCart = await API.getCart();
+                if (checkoutCart.length === 0) {
+                    window.location.href = '/cart.html';
+                    return;
+                }
+                renderSummary(checkoutCart);
+
+                if (API.isLoggedIn()) {
+                    loadUserAddresses();
+                }
+
+                // Check stored coupon
+                const storedCoupon = sessionStorage.getItem('applied_coupon');
+                if (storedCoupon) {
+                    try { appliedCoupon = JSON.parse(storedCoupon); } catch(e){}
+                    renderSummary(checkoutCart);
+                }
+            } catch(e){}
+        }
+
+        async function loadUserAddresses() {
+            try {
+                const addresses = await API.request('/auth/addresses');
+                if (addresses.length > 0) {
+                    document.getElementById('user-addresses-section').style.display = 'block';
+                    document.getElementById('address-form-wrapper').style.display = 'none';
+
+                    let html = '';
+                    addresses.forEach((addr, i) => {
+                        const isSel = i === 0;
+                        if (isSel) selectedAddressId = addr.id;
+
+                        html += `
+                            <label style="padding: 1rem; border: 1.5px solid ${isSel ? 'var(--primary)' : 'var(--border-color)'}; border-radius: var(--radius-md); display: flex; gap: 0.8rem; cursor: pointer; background: ${isSel ? 'var(--primary-light)' : '#ffffff'};">
+                                <input type="radio" name="addr_pick" value="${addr.id}" ${isSel ? 'checked' : ''} onchange="pickAddress(${addr.id}, this)">
+                                <div>
+                                    <strong style="color: var(--secondary);">${addr.full_name}</strong> - ${addr.phone}<br>
+                                    <span style="font-size: 0.85rem; color: var(--text-muted);">${addr.address_line1}, ${addr.city}, ${addr.state} - ${addr.postal_code}</span>
+                                </div>
+                            </label>
+                        `;
+                    });
+                    document.getElementById('addresses-list').innerHTML = html;
+                }
+            } catch(e){}
+        }
+
+        function pickAddress(id, el) {
+            selectedAddressId = id;
+        }
+
+        function togglePaymentUI(method) {
+            const upiBox = document.getElementById('upi-details-box');
+            upiBox.style.display = method === 'UPI' ? 'block' : 'none';
+        }
+
+        function renderSummary(cart) {
+            const container = document.getElementById('checkout-items-preview');
+            let subtotal = 0;
+            let html = '';
+
+            cart.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                subtotal += itemTotal;
+                html += `
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                        <span style="color: var(--secondary); font-weight: 600;">${item.product_name} (x${item.quantity})</span>
+                        <span style="font-weight: 700;">${API.formatCurrency(itemTotal)}</span>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+
+            document.getElementById('chk-subtotal').textContent = API.formatCurrency(subtotal);
+
+            let discount = 0;
+            if (appliedCoupon) {
+                discount = appliedCoupon.discount_amount;
+            }
+            document.getElementById('chk-discount').textContent = `- ${API.formatCurrency(discount)}`;
+
+            const grandTotal = Math.max(0, subtotal - discount);
+            document.getElementById('chk-total').textContent = API.formatCurrency(grandTotal);
+        }
+
+        async function placeOrder() {
+            const btn = document.getElementById('place-order-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing Order...';
+
+            const paymentMethod = document.querySelector('input[name="payment_method"]:checked').value;
+            
+            let guestAddress = null;
+            if (!selectedAddressId) {
+                const name = document.getElementById('addr-name').value.trim();
+                const phone = document.getElementById('addr-phone').value.trim();
+                const line1 = document.getElementById('addr-line1').value.trim();
+                const city = document.getElementById('addr-city').value.trim();
+                const state = document.getElementById('addr-state').value.trim();
+                const pin = document.getElementById('addr-pin').value.trim();
+                const email = document.getElementById('addr-email').value.trim();
+
+                if (!name || !phone || !line1 || !city || !state || !pin) {
+                    API.showToast('Please fill in all required delivery address fields.', 'danger');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-check-circle"></i> Place Order Now';
+                    return;
+                }
+
+                guestAddress = { full_name: name, phone, address_line1: line1, city, state, postal_code: pin, email };
+            }
+
+            const checkoutPayload = {
+                items: checkoutCart.map(i => ({ variant_id: i.variant_id, quantity: i.quantity })),
+                address_id: selectedAddressId,
+                guest_address: guestAddress,
+                payment_method: paymentMethod,
+                coupon_code: appliedCoupon ? appliedCoupon.code : null
+            };
+
+            try {
+                const res = await API.request('/orders', {
+                    method: 'POST',
+                    body: JSON.stringify(checkoutPayload)
+                });
+
+                // If UPI payment, attach UTR if provided
+                if (paymentMethod === 'UPI') {
+                    const utr = document.getElementById('upi-utr').value.trim();
+                    if (utr) {
+                        try {
+                            const formData = new FormData();
+                            formData.append('utr_number', utr);
+                            await fetch(`/api/orders/${res.order_id}/payment-proof`, {
+                                method: 'POST',
+                                body: formData
+                            });
+                        } catch(e){}
+                    }
+                }
+
+                API.showToast('Order placed successfully!', 'success');
+                sessionStorage.removeItem('applied_coupon');
+                localStorage.removeItem('local_cart');
+
+                setTimeout(() => {
+                    window.location.href = API.isLoggedIn() ? `/orders.html` : `/index.html`;
+                }, 1000);
+            } catch (err) {
+                API.showToast(err.message || 'Checkout failed', 'danger');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check-circle"></i> Place Order Now';
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', initCheckout);
+    </script>
+</body>
+</html>

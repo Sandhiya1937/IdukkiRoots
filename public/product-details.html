@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Details - IdukkiRoots</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-container">
+            <a href="/" class="logo">
+                <div class="logo-icon"><i class="fas fa-seedling"></i></div>
+                <span>IdukkiRoots</span>
+            </a>
+            <div class="search-container">
+                <form class="search-form" action="/products.html" method="GET">
+                    <input type="text" name="q" class="search-input" placeholder="Search products...">
+                    <button type="submit" class="search-btn"><i class="fas fa-search"></i> Search</button>
+                </form>
+            </div>
+            <div class="header-actions">
+                <a href="/profile.html" class="action-btn"><i class="far fa-user"></i><span id="user-btn-text">Account</span></a>
+                <a href="/profile.html#wishlist" class="action-btn"><i class="far fa-heart"></i><span>Wishlist</span><span class="action-badge" id="wishlist-count">0</span></a>
+                <a href="/cart.html" class="action-btn"><i class="fas fa-shopping-bag"></i><span>Cart</span><span class="action-badge" id="cart-count">0</span></a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Product Details Main Layout -->
+    <main style="max-width: 1200px; margin: 2rem auto; padding: 0 1.5rem;">
+        <!-- Breadcrumb -->
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;" id="breadcrumb">
+            <a href="/">Home</a> &gt; <a href="/products.html">Products</a> &gt; <span id="bc-title">Loading...</span>
+        </div>
+
+        <div class="product-details-container" id="product-details-content">
+            <p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 4rem;">
+                <i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Loading product details...
+            </p>
+        </div>
+
+        <!-- Reviews Section -->
+        <section style="background: var(--bg-surface); border-radius: var(--radius-lg); padding: 2rem; border: 1px solid var(--border-color); margin-top: 2.5rem;">
+            <h3 style="font-size: 1.4rem; color: var(--secondary); margin-bottom: 1.5rem;">Customer Reviews & Ratings</h3>
+            
+            <div style="display: grid; grid-template-columns: 280px 1fr; gap: 2rem;">
+                <!-- Aggregate rating panel -->
+                <div style="background: var(--bg-main); border-radius: var(--radius-md); padding: 1.5rem; text-align: center; border: 1px solid var(--border-color);">
+                    <div style="font-size: 3.5rem; font-weight: 800; color: var(--secondary); line-height: 1;" id="review-avg">0.0</div>
+                    <div style="color: var(--accent-gold); font-size: 1.2rem; margin: 0.5rem 0;" id="review-stars"></div>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);" id="review-count">Based on 0 reviews</span>
+                </div>
+
+                <!-- Write a review form -->
+                <div style="background: var(--bg-main); border-radius: var(--radius-md); padding: 1.5rem; border: 1px solid var(--border-color);">
+                    <h4 style="font-size: 1.05rem; margin-bottom: 1rem;">Write a Product Review</h4>
+                    <form id="review-form" onsubmit="submitReview(event)">
+                        <div style="display: grid; grid-template-columns: 1fr 120px; gap: 1rem; margin-bottom: 1rem;">
+                            <input type="text" id="rev-name" placeholder="Your Name" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem 0.8rem; font-size: 0.9rem;">
+                            <select id="rev-rating" required style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem 0.8rem; font-size: 0.9rem; font-weight: 600;">
+                                <option value="5">5 ★★★★★</option>
+                                <option value="4">4 ★★★★</option>
+                                <option value="3">3 ★★★</option>
+                                <option value="2">2 ★★</option>
+                                <option value="1">1 ★</option>
+                            </select>
+                        </div>
+                        <textarea id="rev-comment" placeholder="Share your experience with this organic product..." rows="3" required style="width: 100%; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.6rem 0.8rem; font-size: 0.9rem; outline: none; margin-bottom: 1rem; font-family: inherit;"></textarea>
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-paper-plane"></i> Submit Review</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Reviews List -->
+            <div id="reviews-list" style="margin-top: 2rem; display: flex; flex-direction: column; gap: 1rem;">
+                <!-- Dynamic customer reviews -->
+            </div>
+        </section>
+
+        <!-- Recommended Products -->
+        <section style="margin-top: 3rem;">
+            <h3 style="font-size: 1.4rem; color: var(--secondary); margin-bottom: 1.25rem;">You Might Also Like</h3>
+            <div class="product-grid" id="related-products-grid">
+                <!-- Related Products -->
+            </div>
+        </section>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const slug = urlParams.get('slug') || urlParams.get('id');
+
+        let currentProduct = null;
+        let selectedVariant = null;
+
+        async function initProductDetails() {
+            updateHeaderState();
+            updateCounts();
+
+            if (!slug) {
+                window.location.href = '/products.html';
+                return;
+            }
+
+            try {
+                currentProduct = await API.request(`/products/${encodeURIComponent(slug)}`);
+                renderProductDetails(currentProduct);
+                loadReviews(currentProduct.id);
+                renderRecommendations(currentProduct.recommendations);
+            } catch (err) {
+                document.getElementById('product-details-content').innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 3rem;">
+                        <h3 style="color: var(--danger);">Product Not Found</h3>
+                        <a href="/products.html" class="btn btn-primary" style="margin-top: 1rem;">Browse Products</a>
+                    </div>
+                `;
+            }
+        }
+
+        function updateHeaderState() {
+            const user = API.getUser();
+            document.getElementById('user-btn-text').textContent = user ? (user.first_name || 'Account') : 'Login';
+        }
+
+        async function updateCounts() {
+            try {
+                const cart = await API.getCart();
+                document.getElementById('cart-count').textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+            } catch(e){}
+            if (API.isLoggedIn()) {
+                try {
+                    const wishlist = await API.request('/wishlist');
+                    document.getElementById('wishlist-count').textContent = wishlist.length;
+                } catch(e){}
+            }
+        }
+
+        function renderProductDetails(p) {
+            document.getElementById('bc-title').textContent = p.name;
+
+            const images = p.images && p.images.length > 0 ? p.images : [{ image_url: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=800&q=80' }];
+            selectedVariant = p.variants && p.variants.length > 0 ? p.variants[0] : null;
+
+            const content = document.getElementById('product-details-content');
+            
+            content.innerHTML = `
+                <!-- Gallery Left -->
+                <div>
+                    <div class="gallery-main">
+                        <img id="main-img" src="${images[0].image_url}" alt="${p.name}">
+                    </div>
+                    ${images.length > 1 ? `
+                        <div class="gallery-thumbs">
+                            ${images.map((img, i) => `
+                                <div class="thumb-item ${i === 0 ? 'active' : ''}" onclick="switchImage('${img.image_url}', this)">
+                                    <img src="${img.image_url}" style="width:100%; height:100%; object-fit:cover;">
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+
+                <!-- Info Right -->
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: var(--primary); text-transform: uppercase;">
+                        ${p.category_name || 'Kerala Produce'} ${p.subcategory_name ? ' / ' + p.subcategory_name : ''}
+                    </span>
+                    <h1 style="font-size: 1.8rem; color: var(--secondary); margin: 0.4rem 0 0.75rem;">${p.name}</h1>
+
+                    <div class="rating-row" style="margin-bottom: 1rem;">
+                        <div class="stars">${API.renderStars(p.rating_avg)}</div>
+                        <span style="font-weight: 600; font-size: 0.9rem;">${p.rating_avg || 0}</span>
+                        <span class="rating-count">(${p.rating_count || 0} customer reviews)</span>
+                    </div>
+
+                    <!-- Variant Selection -->
+                    <div style="margin: 1rem 0;">
+                        <label style="font-weight: 700; font-size: 0.9rem; color: var(--secondary);">Select Weight / Size:</label>
+                        <div class="variant-selector">
+                            ${p.variants.map((v, i) => `
+                                <div class="variant-pill ${i === 0 ? 'active' : ''}" onclick="selectVariant(${v.id}, this)">
+                                    ${v.weight_value}${v.weight_unit} - ${API.formatCurrency(v.price)}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Price Display -->
+                    <div style="display: flex; align-items: baseline; gap: 0.8rem; margin: 1rem 0 1.5rem;">
+                        <span class="current-price" id="var-price" style="font-size: 2rem;">${API.formatCurrency(selectedVariant ? selectedVariant.price : 0)}</span>
+                        <span class="mrp-price" id="var-mrp" style="font-size: 1.1rem;">${selectedVariant && selectedVariant.mrp > selectedVariant.price ? API.formatCurrency(selectedVariant.mrp) : ''}</span>
+                        <span id="stock-badge" class="badge ${selectedVariant && selectedVariant.stock > 0 ? 'badge-success' : 'badge-danger'}" style="margin-left: auto;">
+                            ${selectedVariant && selectedVariant.stock > 0 ? `In Stock (${selectedVariant.stock} units)` : 'Out of Stock'}
+                        </span>
+                    </div>
+
+                    <!-- Quantity & Cart Buttons -->
+                    <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem;">
+                        <div style="display: flex; align-items: center; border: 1.5px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; height: 46px;">
+                            <button onclick="adjustQty(-1)" style="padding: 0 0.8rem; background: var(--bg-main); border: none; font-size: 1.1rem; cursor: pointer;">-</button>
+                            <input type="number" id="buy-qty" value="1" min="1" max="10" readonly style="width: 45px; text-align: center; border: none; font-weight: 700; font-size: 1rem; outline: none;">
+                            <button onclick="adjustQty(1)" style="padding: 0 0.8rem; background: var(--bg-main); border: none; font-size: 1.1rem; cursor: pointer;">+</button>
+                        </div>
+                        <button class="btn btn-primary" style="flex: 1; height: 46px;" onclick="handleAddToCart()">
+                            <i class="fas fa-cart-plus"></i> Add to Cart
+                        </button>
+                        <button class="wishlist-btn" style="position: static; width: 46px; height: 46px; border-radius: var(--radius-md); border: 1.5px solid var(--border-color);" onclick="API.toggleWishlist(${p.id})">
+                            <i class="fas fa-heart"></i>
+                        </button>
+                    </div>
+
+                    <!-- Description -->
+                    <div style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                        <h4 style="font-size: 1rem; margin-bottom: 0.5rem; color: var(--secondary);">Description</h4>
+                        <p style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.6;">${p.description || '100% natural, premium harvest from Kerala farms.'}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function switchImage(url, el) {
+            document.getElementById('main-img').src = url;
+            document.querySelectorAll('.thumb-item').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        function selectVariant(vId, el) {
+            selectedVariant = currentProduct.variants.find(v => v.id === vId);
+            document.querySelectorAll('.variant-pill').forEach(p => p.classList.remove('active'));
+            el.classList.add('active');
+
+            if (selectedVariant) {
+                document.getElementById('var-price').textContent = API.formatCurrency(selectedVariant.price);
+                document.getElementById('var-mrp').textContent = selectedVariant.mrp > selectedVariant.price ? API.formatCurrency(selectedVariant.mrp) : '';
+                const badge = document.getElementById('stock-badge');
+                if (selectedVariant.stock > 0) {
+                    badge.className = 'badge badge-success';
+                    badge.textContent = `In Stock (${selectedVariant.stock} units)`;
+                } else {
+                    badge.className = 'badge badge-danger';
+                    badge.textContent = 'Out of Stock';
+                }
+            }
+        }
+
+        function adjustQty(delta) {
+            const input = document.getElementById('buy-qty');
+            let val = parseInt(input.value, 10) + delta;
+            if (val < 1) val = 1;
+            if (val > 10) val = 10;
+            input.value = val;
+        }
+
+        async function handleAddToCart() {
+            if (!selectedVariant) return;
+            const qty = parseInt(document.getElementById('buy-qty').value, 10);
+            const img = currentProduct.images && currentProduct.images.length > 0 ? currentProduct.images[0].image_url : '';
+            
+            await API.addToCart(selectedVariant.id, qty, {
+                name: currentProduct.name,
+                price: selectedVariant.price,
+                image: img,
+                variant_details: `${selectedVariant.weight_value}${selectedVariant.weight_unit}`
+            });
+        }
+
+        async function loadReviews(productId) {
+            try {
+                const res = await API.request(`/products/${productId}/reviews`);
+                document.getElementById('review-avg').textContent = res.aggregate.average || '0.0';
+                document.getElementById('review-stars').innerHTML = API.renderStars(res.aggregate.average);
+                document.getElementById('review-count').textContent = `Based on ${res.aggregate.count || 0} reviews`;
+
+                const list = document.getElementById('reviews-list');
+                if (res.reviews.length === 0) {
+                    list.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">No reviews yet. Be the first to review this product!</p>';
+                    return;
+                }
+
+                let html = '';
+                res.reviews.forEach(r => {
+                    html += `
+                        <div style="background: var(--bg-main); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                                <strong style="color: var(--secondary); font-size: 0.95rem;">${r.user_name}</strong>
+                                <span style="font-size: 0.75rem; color: var(--text-light);">${new Date(r.created_at).toLocaleDateString()}</span>
+                            </div>
+                            <div class="stars" style="font-size: 0.85rem; margin-bottom: 0.4rem;">${API.renderStars(r.rating)}</div>
+                            <p style="font-size: 0.88rem; color: var(--text-muted);">${r.comment}</p>
+                        </div>
+                    `;
+                });
+                list.innerHTML = html;
+            } catch(e){}
+        }
+
+        async function submitReview(e) {
+            e.preventDefault();
+            const name = document.getElementById('rev-name').value;
+            const rating = document.getElementById('rev-rating').value;
+            const comment = document.getElementById('rev-comment').value;
+
+            try {
+                await API.request(`/products/${currentProduct.id}/reviews`, {
+                    method: 'POST',
+                    body: JSON.stringify({ user_name: name, rating, comment })
+                });
+                API.showToast('Review submitted successfully!', 'success');
+                document.getElementById('rev-comment').value = '';
+                loadReviews(currentProduct.id);
+            } catch (err) {
+                API.showToast(err.message || 'Failed to submit review', 'danger');
+            }
+        }
+
+        function renderRecommendations(recs) {
+            const grid = document.getElementById('related-products-grid');
+            if (!recs || recs.length === 0) {
+                grid.innerHTML = '<p style="grid-column: 1/-1; color: var(--text-muted);">No recommendations available.</p>';
+                return;
+            }
+
+            let html = '';
+            recs.forEach(p => {
+                const img = p.image_url || 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=400&q=80';
+                html += `
+                    <div class="product-card">
+                        <div class="product-thumb">
+                            <a href="/product-details.html?slug=${p.slug}"><img src="${img}"></a>
+                        </div>
+                        <div class="product-info">
+                            <h3 class="product-title"><a href="/product-details.html?slug=${p.slug}">${p.name}</a></h3>
+                            <div class="price-row">
+                                <span class="current-price">${API.formatCurrency(p.price)}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            grid.innerHTML = html;
+        }
+
+        window.addEventListener('DOMContentLoaded', initProductDetails);
+        window.addEventListener('cart-changed', updateCounts);
+        window.addEventListener('wishlist-changed', updateCounts);
+    </script>
+</body>
+</html>

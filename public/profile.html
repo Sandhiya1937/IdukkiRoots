@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Account & Profile - IdukkiRoots</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-container">
+            <a href="/" class="logo">
+                <div class="logo-icon"><i class="fas fa-seedling"></i></div>
+                <span>IdukkiRoots</span>
+            </a>
+            <div class="header-actions">
+                <a href="/orders.html" class="btn btn-outline btn-sm"><i class="fas fa-box"></i> My Orders</a>
+                <button onclick="API.logout()" class="btn btn-secondary btn-sm"><i class="fas fa-sign-out-alt"></i> Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="catalog-container" style="margin: 2rem auto;">
+        <!-- Left Sidebar Navigation -->
+        <aside class="filter-sidebar">
+            <div style="text-align: center; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+                <div style="width: 70px; height: 70px; border-radius: 50%; background: var(--primary); color: #ffffff; font-size: 2rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.75rem; font-weight: 800;" id="user-avatar-box">
+                    U
+                </div>
+                <h3 id="user-display-name" style="font-size: 1.1rem; color: var(--secondary);">User Name</h3>
+                <span id="user-display-email" style="font-size: 0.8rem; color: var(--text-muted);">user@example.com</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                <button onclick="switchTab('profile')" class="btn btn-outline btn-sm" style="justify-content: flex-start;" id="btn-profile"><i class="fas fa-user-edit"></i> Edit Profile</button>
+                <button onclick="switchTab('addresses')" class="btn btn-outline btn-sm" style="justify-content: flex-start;" id="btn-addresses"><i class="fas fa-map-marked-alt"></i> Address Book</button>
+                <button onclick="switchTab('wishlist')" class="btn btn-outline btn-sm" style="justify-content: flex-start;" id="btn-wishlist"><i class="fas fa-heart"></i> Saved Wishlist</button>
+                <a href="/orders.html" class="btn btn-outline btn-sm" style="justify-content: flex-start;"><i class="fas fa-truck"></i> Order History</a>
+            </div>
+        </aside>
+
+        <!-- Right Main View -->
+        <section style="background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border-color); padding: 1.5rem;">
+            
+            <!-- Tab 1: Profile -->
+            <div id="tab-sec-profile">
+                <h3 style="font-size: 1.25rem; color: var(--secondary); margin-bottom: 1rem;">Personal Information</h3>
+                <form id="profile-form" onsubmit="updateProfile(event)" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; max-width: 600px;">
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600;">First Name</label>
+                        <input type="text" id="prof-fname" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600;">Last Name</label>
+                        <input type="text" id="prof-lname" required class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600;">Email Address (Read-only)</label>
+                        <input type="email" id="prof-email" readonly class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%; background: #f1f5f9;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.85rem; font-weight: 600;">Phone Number</label>
+                        <input type="tel" id="prof-phone" class="search-input" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; width: 100%;">
+                    </div>
+                    <div style="grid-column: 1/-1; margin-top: 0.5rem;">
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Save Profile Changes</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tab 2: Addresses -->
+            <div id="tab-sec-addresses" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="font-size: 1.25rem; color: var(--secondary);">Saved Addresses</h3>
+                    <button class="btn btn-primary btn-sm" onclick="showAddressModal()"><i class="fas fa-plus"></i> Add New Address</button>
+                </div>
+                <div id="addresses-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- Tab 3: Wishlist -->
+            <div id="tab-sec-wishlist" style="display: none;">
+                <h3 style="font-size: 1.25rem; color: var(--secondary); margin-bottom: 1rem;">My Wishlist</h3>
+                <div class="product-grid" id="wishlist-grid">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script>
+        if (!API.isLoggedIn()) {
+            window.location.href = '/register.html';
+        }
+
+        async function initProfile() {
+            try {
+                const user = await API.request('/auth/me');
+                document.getElementById('user-display-name').textContent = `${user.first_name || ''} ${user.last_name || ''}`;
+                document.getElementById('user-display-email').textContent = user.email;
+                document.getElementById('user-avatar-box').textContent = (user.first_name || 'U').charAt(0).toUpperCase();
+
+                document.getElementById('prof-fname').value = user.first_name || '';
+                document.getElementById('prof-lname').value = user.last_name || '';
+                document.getElementById('prof-email').value = user.email || '';
+                document.getElementById('prof-phone').value = user.phone || '';
+
+                if (window.location.hash === '#wishlist') {
+                    switchTab('wishlist');
+                } else if (window.location.hash === '#addresses') {
+                    switchTab('addresses');
+                }
+            } catch(e){}
+        }
+
+        function switchTab(tab) {
+            ['profile', 'addresses', 'wishlist'].forEach(t => {
+                document.getElementById(`tab-sec-${t}`).style.display = t === tab ? 'block' : 'none';
+            });
+            if (tab === 'addresses') loadAddresses();
+            if (tab === 'wishlist') loadWishlist();
+        }
+
+        async function updateProfile(e) {
+            e.preventDefault();
+            const fname = document.getElementById('prof-fname').value;
+            const lname = document.getElementById('prof-lname').value;
+            const phone = document.getElementById('prof-phone').value;
+
+            try {
+                await API.request('/auth/me', {
+                    method: 'PUT',
+                    body: JSON.stringify({ first_name: fname, last_name: lname, phone })
+                });
+                API.showToast('Profile updated successfully!', 'success');
+            } catch (err) {
+                API.showToast(err.message || 'Update failed', 'danger');
+            }
+        }
+
+        async function loadAddresses() {
+            const grid = document.getElementById('addresses-grid');
+            try {
+                const addresses = await API.request('/auth/addresses');
+                if (addresses.length === 0) {
+                    grid.innerHTML = '<p style="color: var(--text-muted);">No addresses saved yet.</p>';
+                    return;
+                }
+                let html = '';
+                addresses.forEach(a => {
+                    html += `
+                        <div style="border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; position: relative; background: var(--bg-card);">
+                            ${a.is_default ? '<span class="badge badge-success" style="position: absolute; top: 10px; right: 10px;">Default</span>' : ''}
+                            <strong style="color: var(--secondary); display: block; margin-bottom: 0.3rem;">${a.full_name}</strong>
+                            <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
+                                ${a.address_line1}<br>
+                                ${a.city}, ${a.state} - ${a.postal_code}<br>
+                                Phone: ${a.phone}
+                            </p>
+                            <button onclick="deleteAddress(${a.id})" style="border: none; background: none; color: var(--danger); font-size: 0.8rem; font-weight: 600; margin-top: 0.5rem; cursor: pointer;">Delete Address</button>
+                        </div>
+                    `;
+                });
+                grid.innerHTML = html;
+            } catch(e){}
+        }
+
+        async function deleteAddress(id) {
+            if (confirm('Delete this address?')) {
+                await API.request(`/auth/address/${id}`, { method: 'DELETE' });
+                API.showToast('Address deleted', 'info');
+                loadAddresses();
+            }
+        }
+
+        async function loadWishlist() {
+            const grid = document.getElementById('wishlist-grid');
+            try {
+                const wishlist = await API.request('/wishlist');
+                if (wishlist.length === 0) {
+                    grid.innerHTML = '<p style="grid-column: 1/-1; color: var(--text-muted);">Your wishlist is empty.</p>';
+                    return;
+                }
+                let html = '';
+                wishlist.forEach(w => {
+                    const img = w.image_url || 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=400&q=80';
+                    html += `
+                        <div class="product-card">
+                            <div class="product-thumb">
+                                <a href="/product-details.html?slug=${w.slug}"><img src="${img}"></a>
+                                <button class="wishlist-btn active" onclick="API.toggleWishlist(${w.product_id}).then(()=>loadWishlist())"><i class="fas fa-heart"></i></button>
+                            </div>
+                            <div class="product-info">
+                                <h3 class="product-title"><a href="/product-details.html?slug=${w.slug}">${w.name}</a></h3>
+                                <div class="price-row"><span class="current-price">${API.formatCurrency(w.price)}</span></div>
+                            </div>
+                        </div>
+                    `;
+                });
+                grid.innerHTML = html;
+            } catch(e){}
+        }
+
+        window.addEventListener('DOMContentLoaded', initProfile);
+    </script>
+</body>
+</html>

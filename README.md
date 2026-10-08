@@ -1,23 +1,4 @@
-# Idukki Roots E-Commerce - Lite Edition
 
-A lightweight, zero-cost initial deployment e-commerce platform built specifically for Idukki Roots.
-
-## ⚠️ IMPORTANT: TEST / INITIAL DEPLOYMENT LIMITATIONS
-
-This application is designed specifically for a **Render Free Web Service** deployment using **SQLite** to achieve zero hosting costs. 
-
-### Ephemeral Storage Warning
-Render Free Web Services use an **ephemeral filesystem**. This means that **every time the server restarts or a new deployment is triggered, all local file changes are permanently deleted.**
-
-Because this version uses local SQLite databases and local file uploads:
-- **Database records** (new users, orders, settings changes) will be lost on restart.
-- **Payment screenshots** (uploaded UPI proofs) will be lost on restart.
-
-### Future Migration
-The codebase has been specifically architected with a database abstraction layer (`src/db/db.js` and repositories) and a file storage abstraction (`src/services/storage.js`). 
-When you are ready for a persistent **Production Deployment**, you must:
-1. Migrate the database connection from SQLite to PostgreSQL.
-2. Migrate the storage service from local `multer` disk storage to an external object storage like AWS S3, Cloudinary, or Supabase Storage.
 
 ## Features
 

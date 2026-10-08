@@ -84,11 +84,76 @@ export const CartProvider = ({ children }) => {
     load();
   }, [isLoggedIn]);
 
-  // Public store settings drive the shipping shown in cart & checkout
+  const broadcastSettingsUpdate = (newSettings) => {
+    try {
+      localStorage.setItem('settings_sync_trigger', String(Date.now()));
+      window.dispatchEvent(new CustomEvent('settings-sync', { detail: newSettings }));
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('idukkiroots_settings_channel');
+        bc.postMessage({ type: 'SETTINGS_UPDATED', settings: newSettings });
+        bc.close();
+      }
+    } catch (e) {
+      // safe fallback
+    }
+  };
+
+  // Public store settings drive the shipping shown in cart & checkout, and branding
+  const refreshSettings = async (broadcast = false) => {
+    try {
+      const data = await API.request('/settings');
+      if (data && typeof data === 'object') {
+        setSettings(data);
+        if (broadcast) {
+          broadcastSettingsUpdate(data);
+        }
+        return data;
+      }
+      return {};
+    } catch (e) {
+      console.error('Failed to fetch settings', e);
+      return {};
+    }
+  };
+
+  const updateSettingsDirectly = (newSettings) => {
+    setSettings((prev) => {
+      const merged = { ...prev, ...newSettings };
+      broadcastSettingsUpdate(merged);
+      return merged;
+    });
+  };
+
   useEffect(() => {
-    API.request('/settings')
-      .then((data) => setSettings(data || {}))
-      .catch(() => setSettings({}));
+    refreshSettings();
+
+    const handleSync = () => refreshSettings(false);
+    const handleStorage = (e) => {
+      if (e.key === 'settings_sync_trigger') refreshSettings(false);
+    };
+
+    window.addEventListener('settings-sync', handleSync);
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleSync);
+
+    let bc = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        bc = new BroadcastChannel('idukkiroots_settings_channel');
+        bc.onmessage = (msg) => {
+          if (msg.data?.type === 'SETTINGS_UPDATED') {
+            refreshSettings(false);
+          }
+        };
+      } catch (err) {}
+    }
+
+    return () => {
+      window.removeEventListener('settings-sync', handleSync);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleSync);
+      if (bc) bc.close();
+    };
   }, []);
 
   // POST /cart sets the absolute quantity of a line (0 removes it)
@@ -222,7 +287,7 @@ export const CartProvider = ({ children }) => {
   const cartCount = (cart.items || []).reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <CartContext.Provider value={{ cart, cartCount, wishlist, settings, addToCart, updateQuantity, removeFromCart, clearCart, toggleWishlist, isInWishlist, fetchCart }}>
+    <CartContext.Provider value={{ cart, cartCount, wishlist, settings, refreshSettings, updateSettingsDirectly, addToCart, updateQuantity, removeFromCart, clearCart, toggleWishlist, isInWishlist, fetchCart }}>
       {children}
     </CartContext.Provider>
   );

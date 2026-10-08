@@ -123,6 +123,25 @@ async function initializeDb() {
 
         await syncIdSequences();
 
+        // Ensure default store settings & update legacy brand name to idukkiroots Natural
+        await pool.query(`
+            INSERT INTO settings (key, value, description) VALUES 
+            ('site_name', 'idukkiroots Natural', 'Store Name'),
+            ('site_tagline', '100% Pure & Fresh from Western Ghats', 'Store Tagline / Slogan'),
+            ('support_email', 'support@idukkiroots.in', 'Customer Support Email'),
+            ('support_phone', '+91 98470 12345', 'Customer Support Phone'),
+            ('support_whatsapp', '+91 98470 12345', 'Customer Support WhatsApp Number'),
+            ('support_hours', 'Mon - Sat: 9:00 AM - 7:00 PM', 'Customer Support Working Hours'),
+            ('contact_address', 'Kattappana, Idukki, Kerala - 685508', 'Customer Support Physical Address'),
+            ('footer_about', 'Sourced directly from the high ranges of Idukki, Kerala. Premium green cardamom, black pepper, authentic tea, and hill produce delivered fresh to your doorstep.', 'Store Tagline / Footer About Text'),
+            ('social_instagram', 'https://instagram.com', 'Instagram Profile Link'),
+            ('social_facebook', 'https://facebook.com', 'Facebook Profile Link'),
+            ('social_whatsapp', 'https://wa.me/919847012345', 'WhatsApp Direct Chat Link'),
+            ('copyright_text', 'idukkiroots Natural. All Rights Reserved.', 'Footer Copyright Text')
+            ON CONFLICT (key) DO NOTHING;
+        `);
+        await pool.query(`UPDATE settings SET value = 'idukkiroots Natural' WHERE key = 'site_name' AND (value = 'IdukkiRoots' OR value = 'idukkiroots' OR value IS NULL)`);
+
         // Sync Admin credentials strictly from .env
         const adminEmail = process.env.ADMIN_EMAIL;
         const adminPassword = process.env.ADMIN_PASSWORD;

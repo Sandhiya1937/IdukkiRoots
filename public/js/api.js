@@ -274,3 +274,52 @@ window.handleGoogleCredentialResponse = async function(response) {
 
 // Expose API globally
 window.API = API;
+
+// Synchronize store branding, logo and contact details across static HTML pages
+API.syncStoreSettings = async function() {
+    try {
+        const settings = await API.request('/settings');
+        if (!settings) return;
+
+        if (settings.site_logo) {
+            document.querySelectorAll('.logo').forEach(el => {
+                const img = el.querySelector('img');
+                if (img) {
+                    img.src = settings.site_logo;
+                } else {
+                    el.innerHTML = `<img src="${settings.site_logo}" alt="${settings.site_name || 'Store Logo'}" style="max-height: 44px; max-width: 190px; object-fit: contain;">`;
+                }
+            });
+        }
+
+        if (settings.support_phone) {
+            document.querySelectorAll('.info-item, footer p, .contact-phone').forEach(el => {
+                if (el.innerHTML && el.innerHTML.includes('fa-phone')) {
+                    el.innerHTML = `<i class="fas fa-phone-alt"></i> ${settings.support_phone}`;
+                }
+            });
+        }
+        if (settings.support_email) {
+            document.querySelectorAll('footer p, .contact-email').forEach(el => {
+                if (el.innerHTML && el.innerHTML.includes('fa-envelope')) {
+                    el.innerHTML = `<i class="fas fa-envelope"></i> ${settings.support_email}`;
+                }
+            });
+        }
+        if (settings.contact_address) {
+            document.querySelectorAll('footer p, .contact-address').forEach(el => {
+                if (el.innerHTML && el.innerHTML.includes('fa-map-marker-alt')) {
+                    el.innerHTML = `<i class="fas fa-map-marker-alt"></i> ${settings.contact_address}`;
+                }
+            });
+        }
+    } catch (e) {}
+};
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', API.syncStoreSettings);
+    } else {
+        API.syncStoreSettings();
+    }
+}

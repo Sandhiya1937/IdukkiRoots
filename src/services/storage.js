@@ -20,23 +20,24 @@ const storage = multer.diskStorage({
         // Generate random filename to prevent path traversal and overriding
         const uniqueSuffix = crypto.randomBytes(16).toString('hex');
         const ext = path.extname(file.originalname).toLowerCase();
-        cb(null, `payment-${uniqueSuffix}${ext}`);
+        const prefix = file.fieldname === 'logo' ? 'logo' : (file.fieldname === 'images' ? 'prod' : 'upload');
+        cb(null, `${prefix}-${uniqueSuffix}${ext}`);
     }
 });
 
 const fileFilter = (req, file, cb) => {
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
     if (allowedMimeTypes.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Invalid file type. Only JPEG, PNG and WEBP are allowed.'), false);
+        cb(new Error('Invalid file type. Only JPEG, PNG, WEBP and SVG are allowed.'), false);
     }
 };
 
 const upload = multer({ 
     storage: storage,
     limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB limit
+        fileSize: 10 * 1024 * 1024 // 10MB limit
     },
     fileFilter: fileFilter
 });

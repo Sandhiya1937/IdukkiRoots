@@ -6,7 +6,7 @@ import { API } from '../api';
 
 export const Header = () => {
   const { user, isLoggedIn, isAdmin, logout } = useAuth();
-  const { cartCount, wishlist } = useCart();
+  const { cartCount, wishlist, settings = {} } = useCart();
   const [searchQuery, setSearchQuery] = useState('');
   const [categories, setCategories] = useState([]);
   const navigate = useNavigate();
@@ -25,24 +25,66 @@ export const Header = () => {
     }
   };
 
+  const storeName = settings?.site_name || 'idukkiroots Natural';
+  const logoUrl = settings?.site_logo;
+
   return (
     <>
       <div className="top-bar">
         <div className="info-item">
           <i className="fas fa-truck"></i>
-          <span>Free Express Shipping across India on orders over ₹499</span>
+          <span>Free Express Shipping across India on orders over ₹{settings?.free_shipping_threshold || 499}</span>
         </div>
-        <div style={{ display: 'flex', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="info-item"><i className="fas fa-shield-alt"></i> 100% Organic & Fresh</span>
-          <span className="info-item"><i className="fas fa-headset"></i> 24/7 Support</span>
+          {settings?.support_phone && (
+            <a href={`tel:${settings.support_phone}`} className="info-item" style={{ color: 'inherit', textDecoration: 'none' }}>
+              <i className="fas fa-headset"></i> Support: {settings.support_phone}
+            </a>
+          )}
+          {settings?.support_whatsapp && (
+            <a
+              href={settings.social_whatsapp || `https://wa.me/${String(settings.support_whatsapp).replace(/\D/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="info-item"
+              style={{ color: '#25D366', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <i className="fab fa-whatsapp"></i> WhatsApp
+            </a>
+          )}
+          {settings?.support_hours && (
+            <span className="info-item"><i className="far fa-clock"></i> {settings.support_hours}</span>
+          )}
         </div>
       </div>
 
       <header className="main-header">
         <div className="header-container">
-          <Link to="/" className="logo">
-            <div className="logo-icon"><i className="fas fa-seedling"></i></div>
-            <span>IdukkiRoots</span>
+          <Link to="/" className="logo" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={storeName}
+                style={{ maxHeight: '44px', maxWidth: '190px', objectFit: 'contain' }}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = e.currentTarget.parentElement?.querySelector('.header-logo-fallback');
+                  if (fallback) fallback.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            <div
+              className="header-logo-fallback"
+              style={{
+                display: logoUrl ? 'none' : 'flex',
+                alignItems: 'center',
+                gap: '0.6rem'
+              }}
+            >
+              <div className="logo-icon"><i className="fas fa-seedling"></i></div>
+              <span>{storeName}</span>
+            </div>
           </Link>
 
           <div className="search-container">

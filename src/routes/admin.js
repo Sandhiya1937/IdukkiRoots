@@ -221,7 +221,7 @@ router.post('/products', async (req, res) => {
     const pool = await getDb();
     const client = await pool.connect();
     try {
-        const { category_id, subcategory_id, name, slug, description, custom_tag, custom_discount_text, variants, image_url } = req.body;
+        const { category_id, subcategory_id, name, slug, description, custom_tag, custom_discount_text, variants, image_url, image_urls } = req.body;
         
         if (!name || !slug || !variants || variants.length === 0) {
             return res.status(400).json({ error: 'Missing required fields or variants.' });
@@ -252,11 +252,20 @@ router.post('/products', async (req, res) => {
             );
         }
 
-        if (image_url) {
+        const urlsToAdd = [];
+        if (Array.isArray(image_urls) && image_urls.length > 0) {
+            urlsToAdd.push(...image_urls.filter(u => typeof u === 'string' && u.trim()));
+        } else if (image_url && typeof image_url === 'string' && image_url.trim()) {
+            urlsToAdd.push(image_url.trim());
+        }
+
+        let isFirstImg = true;
+        for (const u of urlsToAdd) {
             await client.query(
-                'INSERT INTO product_images (product_id, image_url, is_primary) VALUES ($1, $2, TRUE)',
-                [productId, image_url]
+                'INSERT INTO product_images (product_id, image_url, is_primary) VALUES ($1, $2, $3)',
+                [productId, u, isFirstImg]
             );
+            isFirstImg = false;
         }
 
         await client.query('COMMIT');
@@ -345,7 +354,7 @@ router.put('/products/:id', async (req, res) => {
     }
 });
 
-// Product Images Upload
+// Product Images Upload (multiple files)
 router.post('/products/:id/images', upload.array('images', 10), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No images uploaded.' });
@@ -365,7 +374,87 @@ router.post('/products/:id/images', upload.array('images', 10), async (req, res)
             isPrimary = false;
         }
 
-        res.json({ message: 'Images uploaded successfully.' });
+        const updatedImages = await pool.query('SELECT * FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, id ASC', [productId]);
+        res.json({ message: 'Images uploaded successfully.', images: updatedImages.rows });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error.' });
+    }
+});
+
+// Add external image URLs
+router.post('/products/:id/images/urls', async (req, res) => {
+    try {
+        const productId = parseInt(req.params.id, 10);
+        const { urls } = req.body;
+        if (!urls || !Array.isArray(urls) || urls.length === 0) {
+            return res.status(400).json({ error: 'Array of image urls required.' });
+        }
+        const pool = await getDb();
+        const countRes = await pool.query('SELECT COUNT(*)::int as cnt FROM product_images WHERE product_id = $1', [productId]);
+        let isPrimary = countRes.rows[0].cnt === 0;
+        for (const url of urls) {
+            if (url && typeof url === 'string' && url.trim()) {
+                await pool.query(
+                    'INSERT INTO product_images (product_id, image_url, is_primary) VALUES ($1, $2, $3)',
+                    [productId, url.trim(), isPrimary]
+                );
+                isPrimary = false;
+            }
+        }
+        const updatedImages = await pool.query('SELECT * FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, id ASC', [productId]);
+        res.json({ message: 'Image URLs added successfully.', images: updatedImages.rows });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error.' });
+    }
+});
+
+// Delete specific product image
+router.delete('/products/:id/images/:imageId', async (req, res) => {
+    try {
+        const productId = parseInt(req.params.id, 10);
+        const imageId = parseInt(req.params.imageId, 10);
+        const pool = await getDb();
+
+        const imgRes = await pool.query('SELECT * FROM product_images WHERE id = $1 AND product_id = $2', [imageId, productId]);
+        if (imgRes.rowCount === 0) {
+            return res.status(404).json({ error: 'Image not found.' });
+        }
+
+        const wasPrimary = imgRes.rows[0].is_primary;
+        await pool.query('DELETE FROM product_images WHERE id = $1 AND product_id = $2', [imageId, productId]);
+
+        if (wasPrimary) {
+            // Assign primary to the first remaining image of this product
+            await pool.query(`
+                UPDATE product_images 
+                SET is_primary = TRUE 
+                WHERE id = (SELECT id FROM product_images WHERE product_id = $1 ORDER BY display_order ASC, id ASC LIMIT 1)
+            `, [productId]);
+        }
+
+        const updatedImages = await pool.query('SELECT * FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, id ASC', [productId]);
+        res.json({ message: 'Image deleted successfully.', images: updatedImages.rows });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error.' });
+    }
+});
+
+// Set specific product image as primary (cover photo)
+router.put('/products/:id/images/:imageId/primary', async (req, res) => {
+    try {
+        const productId = parseInt(req.params.id, 10);
+        const imageId = parseInt(req.params.imageId, 10);
+        const pool = await getDb();
+
+        await pool.query('UPDATE product_images SET is_primary = FALSE WHERE product_id = $1', [productId]);
+        const result = await pool.query('UPDATE product_images SET is_primary = TRUE WHERE id = $1 AND product_id = $2', [imageId, productId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Image not found.' });
+        }
+
+        const updatedImages = await pool.query('SELECT * FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, id ASC', [productId]);
+        res.json({ message: 'Primary cover image updated successfully.', images: updatedImages.rows });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error.' });
     }
@@ -720,6 +809,7 @@ router.get('/settings', async (req, res) => {
         const settingsRes = await pool.query('SELECT key, value, description FROM settings');
         const settingsObj = {};
         settingsRes.rows.forEach(row => settingsObj[row.key] = row.value);
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         res.json(settingsObj);
     } catch (error) {
         res.status(500).json({ error: 'Internal server error.' });
@@ -737,10 +827,11 @@ router.post('/settings', async (req, res) => {
 
         await client.query('BEGIN');
         for (const [key, value] of Object.entries(settings)) {
+            if (value === undefined || value === null) continue;
             await client.query(
                 `INSERT INTO settings (key, value) VALUES ($1, $2)
                  ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
-                [key, String(value)]
+                [key, String(value).trim()]
             );
         }
         await client.query('COMMIT');
@@ -767,6 +858,43 @@ router.post('/settings/upload-qr', upload.single('image'), async (req, res) => {
         );
 
         res.json({ message: 'QR Code uploaded successfully.', image_url: imageUrl });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error.' });
+    }
+});
+
+// Upload Store Logo (accepts 'logo' or 'image')
+router.post('/settings/upload-logo', (req, res, next) => {
+    upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'image', maxCount: 1 }])(req, res, (err) => {
+        if (err) return res.status(400).json({ error: err.message });
+        next();
+    });
+}, async (req, res) => {
+    try {
+        const file = (req.files && (req.files.logo?.[0] || req.files.image?.[0])) || req.file;
+        if (!file) return res.status(400).json({ error: 'No logo image uploaded.' });
+        
+        const imageUrl = `/uploads/${file.filename}`;
+        const pool = await getDb();
+        await pool.query(
+            `INSERT INTO settings (key, value) VALUES ('site_logo', $1)
+             ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
+            [imageUrl]
+        );
+
+        res.json({ message: 'Logo uploaded successfully.', image_url: imageUrl });
+    } catch (error) {
+        console.error('Upload logo error:', error);
+        res.status(500).json({ error: 'Internal server error.' });
+    }
+});
+
+// Remove Store Logo
+router.delete('/settings/logo', async (req, res) => {
+    try {
+        const pool = await getDb();
+        await pool.query(`DELETE FROM settings WHERE key = 'site_logo'`);
+        res.json({ message: 'Logo removed successfully.' });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error.' });
     }

@@ -89,9 +89,11 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Settings
 INSERT INTO settings (key, value, description) VALUES
-('site_name', 'IdukkiRoots', 'Store Name'),
+('site_name', 'idukkiroots Natural', 'Store Name'),
 ('support_email', 'support@idukkiroots.in', 'Customer Support Email'),
-('support_phone', '+91 98765 43210', 'Customer Support Phone'),
+('support_phone', '+91 98470 12345', 'Customer Support Phone'),
+('contact_address', 'Kattappana, Idukki, Kerala - 685508', 'Customer Support Physical Address'),
+('footer_about', 'Sourced directly from the high ranges of Idukki, Kerala. Premium green cardamom, black pepper, authentic tea, and hill produce delivered fresh to your doorstep.', 'Store Tagline / Footer About Text'),
 ('free_shipping_threshold', '500', 'Order amount threshold for free shipping'),
 ('shipping_charge', '0', 'Standard shipping fee'),
 ('service_charge', '0', 'Standard service charge'),

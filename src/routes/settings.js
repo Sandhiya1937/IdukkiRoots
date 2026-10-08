@@ -13,6 +13,7 @@ router.get('/', async (req, res) => {
             settings[row.key] = row.value;
         });
 
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         res.json(settings);
     } catch (error) {
         console.error('Fetch settings error:', error);

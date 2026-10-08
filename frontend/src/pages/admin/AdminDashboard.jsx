@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API } from '../../api';
+import { useCart } from '../../context/CartContext';
 
 // Values allowed by the orders.status CHECK constraint
 const ORDER_STATUSES = ['PENDING', 'PAYMENT_VERIFICATION_PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
@@ -82,11 +83,13 @@ export const AdminDashboard = () => {
   const [banners, setBanners] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [settingsForm, setSettingsForm] = useState({});
+  const { refreshSettings, updateSettingsDirectly } = useCart();
   const [expandedOrderId, setExpandedOrderId] = useState(null);
 
   // Modal / form state (a null form means the modal is closed)
   const [productForm, setProductForm] = useState(null);
   const [productFiles, setProductFiles] = useState([]);
+  const [reviewForm, setReviewForm] = useState(null);
   const [couponForm, setCouponForm] = useState(null);
   const [customerForm, setCustomerForm] = useState(null);
   const [categoryForm, setCategoryForm] = useState(emptyCategory());
@@ -94,6 +97,7 @@ export const AdminDashboard = () => {
   const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', link_url: '/products' });
   const [bannerFiles, setBannerFiles] = useState([]);
   const [qrFile, setQrFile] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
   const [fileInputKey, setFileInputKey] = useState(0);
 
   const loadData = () => {
@@ -166,7 +170,14 @@ export const AdminDashboard = () => {
   const handleSaveProduct = async (e) => {
     e.preventDefault();
     const { images, ...form } = productForm;
-    const payload = { ...form, slug: form.slug.trim() || slugify(form.name) };
+    const imageUrls = form.image_url
+      ? form.image_url.split(',').map((u) => u.trim()).filter(Boolean)
+      : [];
+    const payload = {
+      ...form,
+      image_urls: imageUrls,
+      slug: form.slug.trim() || slugify(form.name)
+    };
     const saved = await run(
       () => (form.id ? put(`/admin/products/${form.id}`, payload) : post('/admin/products', payload)),
       form.id ? 'Product updated' : 'Product created'
@@ -177,9 +188,36 @@ export const AdminDashboard = () => {
     if (productFiles.length > 0 && productId) {
       const fd = new FormData();
       productFiles.forEach((file) => fd.append('images', file));
-      await run(() => post(`/admin/products/${productId}/images`, fd), 'Images uploaded');
+      await run(() => post(`/admin/products/${productId}/images`, fd), 'Product images uploaded');
     }
     setProductForm(null);
+    setProductFiles([]);
+  };
+
+  const handleDeleteProductImage = async (productId, imageId) => {
+    if (!window.confirm('Delete this image permanently?')) return;
+    const res = await run(() => del(`/admin/products/${productId}/images/${imageId}`), 'Image deleted');
+    if (res && res.images) {
+      setProductForm((f) => (f ? { ...f, images: res.images } : f));
+    }
+  };
+
+  const handleSetPrimaryImage = async (productId, imageId) => {
+    const res = await run(() => put(`/admin/products/${productId}/images/${imageId}/primary`), 'Cover image updated');
+    if (res && res.images) {
+      setProductForm((f) => (f ? { ...f, images: res.images } : f));
+    }
+  };
+
+  const handleUploadPendingFiles = async () => {
+    if (!productForm?.id || productFiles.length === 0) return;
+    const fd = new FormData();
+    productFiles.forEach((file) => fd.append('images', file));
+    const res = await run(() => post(`/admin/products/${productForm.id}/images`, fd), 'Images uploaded');
+    if (res && res.images) {
+      setProductForm((f) => (f ? { ...f, images: res.images } : f));
+      setProductFiles([]);
+    }
   };
 
   const setProductActive = async (product, active) => {
@@ -249,6 +287,22 @@ export const AdminDashboard = () => {
       r.status === 'HIDDEN' ? 'Review is visible again' : 'Review hidden'
     );
 
+  const handleSaveReview = async (e) => {
+    e.preventDefault();
+    if (!reviewForm) return;
+    const ok = await run(
+      () =>
+        put(`/admin/reviews/${reviewForm.id}`, {
+          user_name: reviewForm.user_name,
+          rating: parseInt(reviewForm.rating, 10),
+          comment: reviewForm.comment,
+          status: reviewForm.status
+        }),
+      'Review updated successfully'
+    );
+    if (ok) setReviewForm(null);
+  };
+
   // ---------- Banners ----------
   const handleUploadBanner = async (e) => {
     e.preventDefault();
@@ -278,9 +332,60 @@ export const AdminDashboard = () => {
   };
 
   // ---------- Settings ----------
-  const handleSaveSettings = (e) => {
-    e.preventDefault();
-    run(() => post('/admin/settings', { settings: settingsForm }), 'Settings saved');
+  const handleSaveSettings = async (e, sectionName = 'Store settings') => {
+    if (e && e.preventDefault) e.preventDefault();
+    try {
+      await post('/admin/settings', { settings: settingsForm });
+      API.showToast(`${sectionName} saved and automatically updated in frontend UI!`, 'success');
+      if (updateSettingsDirectly) {
+        updateSettingsDirectly(settingsForm);
+      } else if (refreshSettings) {
+        await refreshSettings(true);
+      }
+    } catch (err) {
+      API.showToast(err.message || 'Failed to save settings', 'danger');
+    }
+  };
+
+  const handleUploadLogo = async () => {
+    if (!logoFile) {
+      API.showToast('Select a logo image file first', 'danger');
+      return;
+    }
+    try {
+      const fd = new FormData();
+      fd.append('logo', logoFile);
+      const res = await post('/admin/settings/upload-logo', fd);
+      if (res && res.image_url) {
+        setLogoFile(null);
+        setFileInputKey((k) => k + 1);
+        setSettingsForm((prev) => ({ ...prev, site_logo: res.image_url }));
+        API.showToast('Store logo uploaded and automatically updated in frontend UI!', 'success');
+        if (updateSettingsDirectly) {
+          updateSettingsDirectly({ site_logo: res.image_url });
+        } else if (refreshSettings) {
+          await refreshSettings(true);
+        }
+      }
+    } catch (err) {
+      API.showToast(err.message || 'Failed to upload logo', 'danger');
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!window.confirm('Remove custom logo and revert to default store seedling icon?')) return;
+    try {
+      await del('/admin/settings/logo');
+      setSettingsForm((prev) => ({ ...prev, site_logo: '' }));
+      API.showToast('Logo removed - frontend reverted to default icon!', 'info');
+      if (updateSettingsDirectly) {
+        updateSettingsDirectly({ site_logo: '' });
+      } else if (refreshSettings) {
+        await refreshSettings(true);
+      }
+    } catch (err) {
+      API.showToast(err.message || 'Failed to remove logo', 'danger');
+    }
   };
 
   const handleUploadQr = async () => {
@@ -290,10 +395,14 @@ export const AdminDashboard = () => {
     }
     const fd = new FormData();
     fd.append('image', qrFile);
-    const ok = await run(() => post('/admin/settings/upload-qr', fd));
+    const ok = await run(() => post('/admin/settings/upload-qr', fd), 'Payment QR uploaded');
     if (ok) {
       setQrFile(null);
       setFileInputKey((k) => k + 1);
+      if (ok.image_url) {
+        setSettingsForm((s) => ({ ...s, payment_qr_url: ok.image_url }));
+        if (updateSettingsDirectly) updateSettingsDirectly({ payment_qr_url: ok.image_url });
+      }
     }
   };
 
@@ -630,13 +739,20 @@ export const AdminDashboard = () => {
                       <small style={{ color: 'var(--text-light)' }}>{formatDate(r.created_at)}</small>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button onClick={() => toggleReviewVisibility(r)} className="btn btn-outline btn-sm">
+                      <button
+                        onClick={() => setReviewForm(r)}
+                        className="btn btn-primary btn-sm"
+                        style={smallBtn}
+                      >
+                        <i className="fas fa-edit"></i> Edit
+                      </button>
+                      <button onClick={() => toggleReviewVisibility(r)} className="btn btn-outline btn-sm" style={smallBtn}>
                         {r.status === 'HIDDEN' ? 'Approve' : 'Hide'}
                       </button>
                       <button
                         onClick={() => window.confirm('Delete this review permanently?') && run(() => del(`/admin/reviews/${r.id}`), 'Review deleted')}
                         className="btn btn-outline btn-sm"
-                        style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                        style={{ ...smallBtn, color: 'var(--danger)', borderColor: 'var(--danger)' }}
                       >
                         Delete
                       </button>
@@ -718,36 +834,435 @@ export const AdminDashboard = () => {
 
         {activeTab === 'settings' && (
           <div>
-            <SectionHeader title="Store Settings" />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
-              <form onSubmit={handleSaveSettings} style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {Object.keys(settingsForm).filter((key) => key !== 'payment_qr_url').map((key) => (
-                  <label key={key} style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
-                    {key === 'upi_id' ? 'UPI ID (shown at checkout)' : humanize(key)}
+            <SectionHeader title="Store Settings & Branding">
+              <button
+                type="button"
+                onClick={(e) => handleSaveSettings(e, 'All store settings')}
+                className="btn btn-primary btn-sm"
+                style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <i className="fas fa-check-circle"></i> Save All Settings
+              </button>
+            </SectionHeader>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.5rem' }}>
+              {/* Card 1: Branding & Logo */}
+              <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '1.15rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                    <i className="fas fa-palette" style={{ color: 'var(--primary)' }}></i> Store Branding & Logo
+                  </h3>
+                  <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>Live UI Sync</span>
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Updates here instantly reflect in the navbar header, footer, and branding across the customer storefront.
+                </p>
+
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                  Store Name *
+                  <input
+                    type="text"
+                    value={settingsForm.site_name ?? 'idukkiroots Natural'}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, site_name: e.target.value })}
+                    className="search-input"
+                    style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                  />
+                </label>
+
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                  Store Tagline / Slogan
+                  <input
+                    type="text"
+                    value={settingsForm.site_tagline ?? ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, site_tagline: e.target.value })}
+                    placeholder="100% Pure & Fresh from Western Ghats"
+                    className="search-input"
+                    style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                  />
+                </label>
+
+                {/* Logo Management Box */}
+                <div style={{ background: '#f8fafc', padding: '1.1rem', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: '0.88rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <i className="fas fa-image" style={{ color: 'var(--primary)' }}></i> Store Logo
+                    </strong>
+                    {settingsForm.site_logo ? (
+                      <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>Custom Logo Active</span>
+                    ) : (
+                      <span className="badge" style={{ fontSize: '0.7rem', background: '#e2e8f0', color: '#475569' }}>Default Seedling Icon</span>
+                    )}
+                  </div>
+
+                  {/* Logo Live Preview */}
+                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ flex: 1, minWidth: '150px' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Header/Footer Dark Preview</span>
+                      <div style={{ background: 'var(--secondary)', padding: '0.6rem 1rem', borderRadius: '6px', minHeight: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {settingsForm.site_logo ? (
+                          <img
+                            src={settingsForm.site_logo}
+                            alt="Logo preview"
+                            style={{ maxHeight: '42px', maxWidth: '100%', objectFit: 'contain' }}
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div style={{ color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                            <div className="logo-icon" style={{ width: '28px', height: '28px', fontSize: '0.8rem' }}><i className="fas fa-seedling"></i></div>
+                            <span>{settingsForm.site_name || 'idukkiroots Natural'}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: '150px' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>Light Background Preview</span>
+                      <div style={{ background: '#ffffff', border: '1px solid var(--border-color)', padding: '0.6rem 1rem', borderRadius: '6px', minHeight: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {settingsForm.site_logo ? (
+                          <img
+                            src={settingsForm.site_logo}
+                            alt="Logo light preview"
+                            style={{ maxHeight: '42px', maxWidth: '100%', objectFit: 'contain' }}
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div style={{ color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                            <div className="logo-icon" style={{ width: '28px', height: '28px', fontSize: '0.8rem' }}><i className="fas fa-seedling"></i></div>
+                            <span>{settingsForm.site_name || 'idukkiroots Natural'}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {settingsForm.site_logo && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                        <strong>URL:</strong> {settingsForm.site_logo}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        className="btn btn-outline btn-sm"
+                        style={{ color: 'var(--danger)', borderColor: 'var(--danger)', padding: '0.2rem 0.5rem', fontSize: '0.75rem', marginLeft: 'auto' }}
+                      >
+                        <i className="fas fa-trash"></i> Remove Logo
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Method 1: Upload image file */}
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem', color: 'var(--secondary)' }}>
+                      1. Upload Logo File (PNG, JPG, SVG, WEBP)
+                    </span>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <input
+                        key={`logo-${fileInputKey}`}
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                        onChange={(e) => setLogoFile(e.target.files[0] || null)}
+                        style={{ fontSize: '0.82rem', flex: 1, minWidth: '180px' }}
+                      />
+                      <button
+                        type="button"
+                        disabled={!logoFile}
+                        onClick={handleUploadLogo}
+                        className="btn btn-primary btn-sm"
+                        style={{ opacity: logoFile ? 1 : 0.6 }}
+                      >
+                        <i className="fas fa-upload"></i> Upload Logo
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Method 2: Direct URL */}
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem', color: 'var(--secondary)' }}>
+                      2. Or Set Logo Image URL Directly
+                    </span>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <input
+                        type="text"
+                        placeholder="https://example.com/logo.png or /uploads/..."
+                        value={settingsForm.site_logo ?? ''}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, site_logo: e.target.value })}
+                        className="search-input"
+                        style={{ ...inputStyle, padding: '0.45rem 0.6rem', fontSize: '0.82rem' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => handleSaveSettings(e, 'Store logo')}
+                        className="btn btn-outline btn-sm"
+                        style={{ whiteSpace: 'nowrap' }}
+                      >
+                        Apply URL
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                  Footer About / Store Description
+                  <textarea
+                    rows="3"
+                    value={settingsForm.footer_about ?? ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, footer_about: e.target.value })}
+                    className="search-input"
+                    style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                  ></textarea>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={(e) => handleSaveSettings(e, 'Store branding')}
+                  className="btn btn-primary btn-sm"
+                  style={{ width: 'fit-content', fontWeight: 600 }}
+                >
+                  <i className="fas fa-save"></i> Save Branding
+                </button>
+              </div>
+
+              {/* Card 2: Contact Details */}
+              <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '1.15rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                    <i className="fas fa-headset" style={{ color: 'var(--primary)' }}></i> Contact & Customer Care Details
+                  </h3>
+                  <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>Live UI Sync</span>
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
+                  These contact details automatically update in the footer Customer Care block and top header bar.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                    Customer Support Phone
                     <input
                       type="text"
-                      value={settingsForm[key] ?? ''}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, [key]: e.target.value })}
+                      value={settingsForm.support_phone ?? ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, support_phone: e.target.value })}
+                      placeholder="+91 98470 12345"
                       className="search-input"
                       style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
                     />
                   </label>
-                ))}
-                <small style={{ color: 'var(--text-muted)' }}>
-                  Shipping: orders at or above the free shipping threshold ship free; others pay the shipping charge.
-                </small>
-                <button type="submit" className="btn btn-primary btn-sm" style={{ width: 'fit-content' }}>Save Settings</button>
-              </form>
 
-              <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <strong>UPI Payment QR Code</strong>
-                {settingsForm.payment_qr_url ? (
-                  <img src={settingsForm.payment_qr_url} alt="Current payment QR" style={{ width: '200px', height: '200px', objectFit: 'contain', border: '1px solid var(--border-color)', borderRadius: '8px' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                ) : (
-                  <p style={{ color: 'var(--text-muted)' }}>No QR uploaded - checkout generates one from the UPI ID.</p>
-                )}
-                <input key={`qr-${fileInputKey}`} type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setQrFile(e.target.files[0] || null)} />
-                <button type="button" onClick={handleUploadQr} className="btn btn-outline btn-sm" style={{ width: 'fit-content' }}><i className="fas fa-upload"></i> Upload QR</button>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                    WhatsApp Support Number
+                    <input
+                      type="text"
+                      value={settingsForm.support_whatsapp ?? ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, support_whatsapp: e.target.value })}
+                      placeholder="+91 98470 12345"
+                      className="search-input"
+                      style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                    />
+                  </label>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                    Customer Support Email
+                    <input
+                      type="email"
+                      value={settingsForm.support_email ?? ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, support_email: e.target.value })}
+                      placeholder="support@idukkiroots.in"
+                      className="search-input"
+                      style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                    />
+                  </label>
+
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                    Working Hours / Timings
+                    <input
+                      type="text"
+                      value={settingsForm.support_hours ?? ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, support_hours: e.target.value })}
+                      placeholder="Mon - Sat: 9:00 AM - 7:00 PM"
+                      className="search-input"
+                      style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                    />
+                  </label>
+                </div>
+
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                  Physical Store Address
+                  <textarea
+                    rows="2"
+                    value={settingsForm.contact_address ?? ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, contact_address: e.target.value })}
+                    placeholder="Kattappana, Idukki, Kerala - 685508"
+                    className="search-input"
+                    style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                  ></textarea>
+                </label>
+
+                {/* Social & Chat Links */}
+                <div style={{ background: '#f8fafc', padding: '0.9rem', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                  <strong style={{ fontSize: '0.82rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <i className="fas fa-share-alt" style={{ color: 'var(--primary)' }}></i> Social Media & Direct Chat Links
+                  </strong>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.6rem' }}>
+                    <label style={{ fontSize: '0.78rem', color: '#475569' }}>
+                      WhatsApp Direct Link
+                      <input
+                        type="text"
+                        value={settingsForm.social_whatsapp ?? ''}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, social_whatsapp: e.target.value })}
+                        placeholder="https://wa.me/919847012345"
+                        className="search-input"
+                        style={{ ...inputStyle, padding: '0.4rem 0.6rem', marginTop: '0.2rem', fontSize: '0.8rem' }}
+                      />
+                    </label>
+
+                    <label style={{ fontSize: '0.78rem', color: '#475569' }}>
+                      Instagram Profile URL
+                      <input
+                        type="text"
+                        value={settingsForm.social_instagram ?? ''}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, social_instagram: e.target.value })}
+                        placeholder="https://instagram.com/idukkiroots"
+                        className="search-input"
+                        style={{ ...inputStyle, padding: '0.4rem 0.6rem', marginTop: '0.2rem', fontSize: '0.8rem' }}
+                      />
+                    </label>
+
+                    <label style={{ fontSize: '0.78rem', color: '#475569' }}>
+                      Facebook Profile URL
+                      <input
+                        type="text"
+                        value={settingsForm.social_facebook ?? ''}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, social_facebook: e.target.value })}
+                        placeholder="https://facebook.com/idukkiroots"
+                        className="search-input"
+                        style={{ ...inputStyle, padding: '0.4rem 0.6rem', marginTop: '0.2rem', fontSize: '0.8rem' }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                  Footer Copyright Text
+                  <input
+                    type="text"
+                    value={settingsForm.copyright_text ?? ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, copyright_text: e.target.value })}
+                    placeholder="idukkiroots Natural. All Rights Reserved."
+                    className="search-input"
+                    style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                  />
+                </label>
+
+                {/* Live Preview Box */}
+                <div style={{ background: 'var(--secondary)', color: '#cbd5e1', padding: '1rem', borderRadius: '8px', fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <span style={{ color: 'var(--accent-gold)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    <i className="fas fa-eye"></i> Live Footer Preview
+                  </span>
+                  <div><strong>Phone:</strong> {settingsForm.support_phone || '(not set)'}</div>
+                  <div><strong>WhatsApp:</strong> {settingsForm.support_whatsapp || '(not set)'}</div>
+                  <div><strong>Email:</strong> {settingsForm.support_email || '(not set)'}</div>
+                  <div><strong>Hours:</strong> {settingsForm.support_hours || '(not set)'}</div>
+                  <div><strong>Address:</strong> {settingsForm.contact_address || '(not set)'}</div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={(e) => handleSaveSettings(e, 'Contact details')}
+                  className="btn btn-primary btn-sm"
+                  style={{ width: 'fit-content', fontWeight: 600 }}
+                >
+                  <i className="fas fa-save"></i> Save Contact Info
+                </button>
+              </div>
+
+              {/* Card 3: Shipping Rules */}
+              <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h3 style={{ fontSize: '1.1rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <i className="fas fa-truck"></i> Shipping Rules & Charges
+                </h3>
+
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                  Free Shipping Threshold (₹)
+                  <input
+                    type="number"
+                    value={settingsForm.free_shipping_threshold ?? '500'}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, free_shipping_threshold: e.target.value })}
+                    className="search-input"
+                    style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                  />
+                </label>
+
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                  Standard Shipping Fee (₹)
+                  <input
+                    type="number"
+                    value={settingsForm.shipping_charge ?? '0'}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, shipping_charge: e.target.value })}
+                    className="search-input"
+                    style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                  />
+                </label>
+
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                  Service Charge (₹)
+                  <input
+                    type="number"
+                    value={settingsForm.service_charge ?? '0'}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, service_charge: e.target.value })}
+                    className="search-input"
+                    style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                  />
+                </label>
+
+                <button type="button" onClick={handleSaveSettings} className="btn btn-primary btn-sm" style={{ width: 'fit-content' }}>
+                  Save Shipping Rules
+                </button>
+              </div>
+
+              {/* Card 4: UPI Payment & QR Code */}
+              <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <h3 style={{ fontSize: '1.1rem', color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <i className="fas fa-qrcode"></i> UPI Payments & QR Code
+                </h3>
+
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+                  UPI ID (shown at checkout)
+                  <input
+                    type="text"
+                    value={settingsForm.upi_id ?? ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, upi_id: e.target.value })}
+                    placeholder="merchant@upi"
+                    className="search-input"
+                    style={{ ...inputStyle, marginTop: '0.3rem', fontWeight: 400 }}
+                  />
+                </label>
+
+                <div>
+                  <strong style={{ fontSize: '0.85rem', display: 'block', marginBottom: '0.4rem' }}>Payment QR Code</strong>
+                  {settingsForm.payment_qr_url ? (
+                    <img
+                      src={settingsForm.payment_qr_url}
+                      alt="Current payment QR"
+                      style={{ width: '160px', height: '160px', objectFit: 'contain', border: '1px solid var(--border-color)', borderRadius: '8px', display: 'block', marginBottom: '0.5rem' }}
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  ) : (
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No QR uploaded - checkout generates one from the UPI ID.</p>
+                  )}
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <input key={`qr-${fileInputKey}`} type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setQrFile(e.target.files[0] || null)} style={{ fontSize: '0.85rem' }} />
+                    <button type="button" disabled={!qrFile} onClick={handleUploadQr} className="btn btn-outline btn-sm" style={{ width: 'fit-content', opacity: qrFile ? 1 : 0.6 }}>
+                      <i className="fas fa-upload"></i> Upload QR
+                    </button>
+                  </div>
+                </div>
+
+                <button type="button" onClick={handleSaveSettings} className="btn btn-primary btn-sm" style={{ width: 'fit-content' }}>
+                  Save UPI ID
+                </button>
               </div>
             </div>
           </div>
@@ -804,18 +1319,137 @@ export const AdminDashboard = () => {
             </div>
 
             <div>
-              <strong style={{ fontSize: '0.9rem' }}>Images</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                <strong style={{ fontSize: '0.9rem' }}>Product Images (Multiple Supported)</strong>
+                {productFiles.length > 0 && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>
+                    {productFiles.length} file(s) ready to upload
+                  </span>
+                )}
+              </div>
+
+              {/* Existing Images Gallery */}
               {productForm.images?.length > 0 && (
-                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', margin: '0.4rem 0' }}>
-                  {productForm.images.map((img) => (
-                    <img key={img.id} src={img.image_url} alt="" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '6px', border: img.is_primary ? '2px solid var(--primary)' : '1px solid var(--border-color)' }} />
-                  ))}
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                    Current photos (star indicates primary cover photo):
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '0.5rem' }}>
+                    {productForm.images.map((img) => (
+                      <div
+                        key={img.id}
+                        style={{
+                          position: 'relative',
+                          border: img.is_primary ? '2px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          background: '#f8fafc'
+                        }}
+                      >
+                        <img src={img.image_url} alt="" style={{ width: '100%', height: '80px', objectFit: 'cover', display: 'block' }} />
+                        {img.is_primary && (
+                          <span
+                            style={{
+                              position: 'absolute',
+                              top: 3,
+                              left: 3,
+                              background: 'var(--accent-gold)',
+                              color: '#fff',
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              padding: '1px 5px',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            <i className="fas fa-star"></i> Cover
+                          </span>
+                        )}
+                        <div style={{ display: 'flex', borderTop: '1px solid var(--border-color)', background: '#fff' }}>
+                          {!img.is_primary && productForm.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimaryImage(productForm.id, img.id)}
+                              style={{ flex: 1, border: 'none', background: 'none', padding: '4px 0', fontSize: '0.7rem', color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
+                              title="Set as cover photo"
+                            >
+                              Set Cover
+                            </button>
+                          )}
+                          {productForm.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProductImage(productForm.id, img.id)}
+                              style={{ border: 'none', background: 'none', padding: '4px 8px', fontSize: '0.75rem', color: 'var(--danger)', cursor: 'pointer' }}
+                              title="Delete photo"
+                            >
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-              {!productForm.id && (
-                <input type="text" placeholder="Image URL (optional if uploading files)" value={productForm.image_url} onChange={(e) => setProductForm({ ...productForm, image_url: e.target.value })} className="search-input" style={{ ...inputStyle, marginTop: '0.4rem' }} />
-              )}
-              <input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(e) => setProductFiles(Array.from(e.target.files))} style={{ marginTop: '0.4rem' }} />
+
+              {/* Upload Multiple New Images */}
+              <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', border: '1px dashed var(--border-color)' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--secondary)', marginBottom: '0.3rem' }}>
+                  <i className="fas fa-images"></i> Select multiple images to upload (JPG, PNG, WebP):
+                </label>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(e) => {
+                    const newFiles = Array.from(e.target.files);
+                    setProductFiles((prev) => [...prev, ...newFiles]);
+                  }}
+                  style={{ width: '100%', fontSize: '0.85rem' }}
+                />
+
+                {/* Selected Files preview pills */}
+                {productFiles.length > 0 && (
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.5rem', alignItems: 'center' }}>
+                    {productFiles.map((file, fIdx) => (
+                      <span
+                        key={fIdx}
+                        className="badge badge-info"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                      >
+                        <i className="far fa-image"></i> {file.name}
+                        <button
+                          type="button"
+                          onClick={() => setProductFiles(productFiles.filter((_, idx) => idx !== fIdx))}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'inherit', padding: 0, marginLeft: '0.2rem' }}
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </span>
+                    ))}
+                    {productForm.id && (
+                      <button
+                        type="button"
+                        onClick={handleUploadPendingFiles}
+                        className="btn btn-primary btn-sm"
+                        style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+                      >
+                        <i className="fas fa-upload"></i> Upload Now
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Or enter Image URLs */}
+              <input
+                type="text"
+                placeholder="Or enter image URL(s) - comma separated if multiple"
+                value={productForm.image_url}
+                onChange={(e) => setProductForm({ ...productForm, image_url: e.target.value })}
+                className="search-input"
+                style={{ ...inputStyle, marginTop: '0.4rem', fontSize: '0.85rem' }}
+              />
             </div>
 
             {productForm.id && (
@@ -827,6 +1461,76 @@ export const AdminDashboard = () => {
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
               <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Product</button>
               <button type="button" onClick={() => setProductForm(null)} className="btn btn-outline">Cancel</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Edit Review Modal */}
+      {reviewForm && (
+        <Modal title={`Edit Review #${reviewForm.id}`} onClose={() => setReviewForm(null)} maxWidth="500px">
+          <form onSubmit={handleSaveReview} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div>
+              <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>Product</label>
+              <div style={{ padding: '0.3rem 0', fontWeight: 600, color: 'var(--primary)' }}>
+                {reviewForm.product_name || `Product #${reviewForm.product_id}`}
+              </div>
+            </div>
+
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+              Reviewer Name *
+              <input
+                type="text"
+                required
+                value={reviewForm.user_name || ''}
+                onChange={(e) => setReviewForm({ ...reviewForm, user_name: e.target.value })}
+                className="search-input"
+                style={{ ...inputStyle, marginTop: '0.3rem' }}
+              />
+            </label>
+
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+              Rating *
+              <select
+                value={reviewForm.rating}
+                onChange={(e) => setReviewForm({ ...reviewForm, rating: parseInt(e.target.value, 10) })}
+                style={{ ...inputStyle, marginTop: '0.3rem' }}
+              >
+                <option value={5}>5 Stars - Excellent</option>
+                <option value={4}>4 Stars - Good</option>
+                <option value={3}>3 Stars - Average</option>
+                <option value={2}>2 Stars - Poor</option>
+                <option value={1}>1 Star - Terrible</option>
+              </select>
+            </label>
+
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+              Review Comment *
+              <textarea
+                rows="4"
+                required
+                value={reviewForm.comment || ''}
+                onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
+                className="search-input"
+                style={{ ...inputStyle, marginTop: '0.3rem' }}
+              ></textarea>
+            </label>
+
+            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--secondary)' }}>
+              Status *
+              <select
+                value={reviewForm.status || 'APPROVED'}
+                onChange={(e) => setReviewForm({ ...reviewForm, status: e.target.value })}
+                style={{ ...inputStyle, marginTop: '0.3rem' }}
+              >
+                <option value="APPROVED">APPROVED (Visible in app)</option>
+                <option value="HIDDEN">HIDDEN (Hidden from app)</option>
+              </select>
+            </label>
+
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save Changes</button>
+              <button type="button" onClick={() => setReviewForm(null)} className="btn btn-outline">Cancel</button>
             </div>
           </form>
         </Modal>
